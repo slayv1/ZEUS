@@ -1,0 +1,11 @@
+[17:50:56] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[17:56:42] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[18:00:54] COMMAND(voice) OK: каэс два
+[18:00:54] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[18:02:05] COMMAND(voice) OK: есть ася
+[18:02:05] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[18:04:32] COMMAND(voice) OK: качество
+[18:04:32] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[18:04:46] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[18:05:00] COMMAND(voice) OK: каэс два
+[18:05:01] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.

@@ -1,0 +1,33 @@
+[CrashHandler] Глобальный перехватчик исключений установлен
+[AudioEngine] Микрофон # 0: Переназначение звуковых устр. - Input (по умолчанию)
+[WakeWord] Библиотека Vosk найдена
+[AudioEngine] Микрофон: доступен
+[ZeusUI] Инициализация завершена за 0.4 с
+[Actions] commands.json загружен в кеш: 30 приложений, 0 игр
+[AudioEngine] _start_wake_listen: запуск легкого Wake Word детектора
+[WakeWord] Загрузка модели: https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+[Piper] espeak-ng-data: используется кеш C:\Users\admin\AppData\Local\ZeusPiper\espeak-ng-data
+[Piper] espeak-ng-data: C:\Users\admin\AppData\Local\ZeusPiper\espeak-ng-data
+[Piper] Голос загружен: voice.onnx
+[Hotkeys] Не удалось зарегистрировать Ctrl+Alt+Space (вероятно, комбинация занята другой программой)
+[WakeWord] Цикл прослушивания остановлен
+[AudioEngine] Прослушивание остановлено
+[WakeWord] Цикл прослушивания остановлен
+[AudioEngine] Прослушивание остановлено
+[WakeWord] Цикл прослушивания остановлен
+[AudioEngine] Прослушивание остановлено
+[WakeWord] Цикл прослушивания остановлен
+[AudioEngine] Прослушивание остановлено
+[WakeWord] Цикл прослушивания остановлен
+[AudioEngine] Прослушивание остановлено
+[WakeWord] Модель успешно загружена
+[WakeWord] Не удалось создать ASCII-ссылку на модель: [WinError 183] Невозможно создать файл, так как он уже существует
+[WakeWord] Ошибка загрузки модели: Failed to create a model
+[WakeWord] Модель недоступна — детектор не запущен
+[AudioEngine] Лёгкий Wake Word запущен (Sleep)
+[AudioEngine] start_wake_mode: _start_wake_listen завершен, проверяем состояние wake детектора
+[AudioEngine] WakeWordDetector НЕ доступен
+[AudioEngine] _start_wake_listen: запуск легкого Wake Word детектора
+[AudioEngine] Wake Word недоступен — микрофон отключён (Sleep)
+[AudioEngine] start_wake_mode: _start_wake_listen завершен, проверяем состояние wake детектора
+[AudioEngine] WakeWordDetector НЕ доступен

@@ -1,0 +1,33 @@
+[02:13:57] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[02:14:08] COMMAND(voice) OK: абсолютно сыграл всю кадку за него это получается порядка часа тридцать минут
+[02:14:14] LLM_OK(llm) OK action=chat: Вот это да! Зевс - великан из греческой мифологии, царь богов и правитель Олимпуса. Его персонаж всегда вызывает уважение и признание. И да, играя за Зевса, действительно можно потратить часы, чтобы п
+[02:37:32] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[02:37:50] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[06:33:18] COMMAND(voice) OK: Запусти cs2
+[06:33:18] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[06:51:27] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[06:51:32] COMMAND(voice) OK: запусти каэс два
+[06:51:32] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[06:51:47] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[06:51:52] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[06:51:52] SYSTEM(system) ERR action=not_found: Не нашёл 'каждого' в списке команд. Добавьте его в commands.json или скажите 'найди каждого'.
+[06:52:16] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[06:52:21] COMMAND(voice) OK: запусти касс два
+[06:52:21] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[06:52:21] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[07:17:21] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[07:17:26] COMMAND(voice) OK: сэр запусти каюсь два
+тного диалога
+[07:17:26] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[07:17:58] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[07:18:05] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[07:18:09] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[07:18:09] COMMAND(voice) OK: сэр запусти каюсь два
+[07:18:09] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[07:26:30] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[07:26:35] COMMAND(voice) OK: да сэр запусти касс два
+[07:26:35] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[07:57:12] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[07:57:16] COMMAND(voice) OK: да сэр запусти с два
+[07:57:16] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[07:57:17] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.

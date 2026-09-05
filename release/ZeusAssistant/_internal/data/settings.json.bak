@@ -1,0 +1,36 @@
+{
+    "ai_settings": {
+        "model": "llama3.1",
+        "temperature": 0.4,
+        "max_tokens": 2048,
+        "system_prompt": "Ты — Зевс"
+    },
+    "voice_settings": {
+        "enabled": true,
+        "wake_word": "Зевс",
+        "tts_enabled": true,
+        "language": "ru-RU",
+        "mic_index": null,
+        "rate": 190,
+        "volume": 1.0,
+        "voice": "auto",
+        "tts_engine": "piper",
+        "follow_up_enabled": true,
+        "follow_up_timeout": 5,
+        "sfx_enabled": true,
+        "logging_enabled": true,
+        "piper_model": "models/tts/voice.onnx",
+        "piper_length_scale": 0.9,
+        "piper_noise_scale": 0.6,
+        "wake_energy_threshold": 30,
+        "mic_gain": 1.5
+    },
+    "app_settings": {
+        "theme": "dark",
+        "autostart": false,
+        "data_path": "./data",
+        "hotkey_enabled": false,
+        "debug_wake": false,
+        "auto_scan": true
+    }
+}

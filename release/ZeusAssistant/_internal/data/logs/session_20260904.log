@@ -1,0 +1,111 @@
+[14:20:02] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[14:20:07] COMMAND(voice) OK: да сэр запусти касс два
+�ого диалога
+[14:20:07] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[14:28:28] COMMAND(voice) OK: есть сэр
+[14:28:28] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[14:29:11] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[14:29:15] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[14:29:15] COMMAND(voice) OK: запусти каэс два
+[14:29:16] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[14:36:32] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[14:36:36] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[14:36:36] COMMAND(voice) OK: сэр запусти каэс два
+[14:36:36] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[14:45:30] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[14:56:01] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[14:56:05] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[14:56:05] COMMAND(voice) OK: запусти касс два
+[14:56:05] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[15:04:22] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[15:04:27] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[15:04:27] COMMAND(voice) OK: сэр запусти каэс два
+[15:04:27] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[15:04:36] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[15:04:39] COMMAND(voice) OK: молодец
+[15:04:39] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[15:04:39] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[15:23:28] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[15:27:43] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[15:27:48] COMMAND(voice) OK: все зато стекая с два
+[15:27:48] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[15:27:48] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[15:27:59] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[15:28:04] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[15:28:04] COMMAND(voice) OK: запусти каэс два
+[15:28:04] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:01:52] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:01:57] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:01:57] COMMAND(voice) OK: да сэр запусти каэс два
+[16:01:57] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:08:01] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:08:08] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:08:13] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:08:13] COMMAND(voice) OK: сэр запусти каэс два
+[16:08:13] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:09:14] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:09:19] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:09:19] COMMAND(voice) OK: запусти каэс два
+[16:09:19] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:09:27] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:09:31] COMMAND(voice) OK: молодец
+[16:09:31] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:09:31] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[16:13:41] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:13:46] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:13:46] SYSTEM(system) ERR action=not_found: Не нашёл 'каждого' в списке команд. Добавьте его в commands.json или скажите 'найди каждого'.
+[16:13:52] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:14:03] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:14:08] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:14:08] COMMAND(voice) OK: сэр запусти кэсс два
+[16:14:08] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:16:22] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:16:26] COMMAND(voice) OK: сэр запусти каждого
+�стного диалога
+[16:16:26] SYSTEM(system) ERR action=not_found: Не нашёл 'каждого' в списке команд. Добавьте его в commands.json или скажите 'найди каждого'.
+[16:25:56] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:26:00] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:26:00] COMMAND(voice) OK: да сэр запусти каждого
+[16:26:01] SYSTEM(system) ERR action=not_found: Не нашёл 'каждого' в списке команд. Добавьте его в commands.json или скажите 'найди каждого'.
+[16:26:30] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:26:34] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:26:34] COMMAND(voice) OK: да сэр запусти каэс два
+[16:26:34] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:26:42] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:27:47] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:27:52] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:27:52] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:28:02] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:28:26] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:28:30] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:28:30] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:29:28] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:29:42] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:29:47] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:29:47] COMMAND(voice) OK: да сэр запусти касс два
+[16:29:47] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:30:32] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:30:42] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:30:47] COMMAND(voice) OK: сэр запусти каэс два
+[16:30:47] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:30:47] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:32:03] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:32:08] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[16:32:08] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[16:38:55] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[16:39:04] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[18:09:35] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[18:09:43] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[18:09:47] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
+[18:09:47] COMMAND(voice) OK: запусти каюсь
+[18:09:47] SYSTEM(system) ERR action=not_found: Не нашёл 'каюсь' в списке команд. Добавьте его в commands.json или скажите 'найди каюсь'.
+[18:10:01] WAKE(voice) OK: Ключевое слово «Зевс» распознано
+[22:56:03] COMMAND(voice) OK: да он
+[22:56:03] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[22:57:01] COMMAND(voice) OK: да
+[22:57:01] LLM_ERR(llm) ERR: Ошибка подключения к Ollama: Client.chat() got an unexpected keyword argument 'host'
+[22:59:28] COMMAND(voice) OK: да
+[23:00:37] COMMAND(voice) OK: та
+[23:00:44] LLM_OK(llm) OK action=chat: Хера
+[23:00:59] COMMAND(voice) OK: там
+[23:01:02] LLM_OK(llm) OK action=chat: Олимп

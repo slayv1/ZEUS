@@ -1,0 +1,1354 @@
+{
+  "cs2.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe",
+    "source": "internal"
+  },
+  "vconsole2.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\vconsole2.exe",
+    "source": "internal"
+  },
+  "csgo_legacy_app.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\bin\\legacy\\csgo_legacy_app.exe",
+    "source": "internal"
+  },
+  "gss2.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Gas Station Simulator\\GSS2.exe",
+    "source": "internal"
+  },
+  "crashreportclient.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Gas Station Simulator\\Engine\\Binaries\\Win64\\CrashReportClient.exe",
+    "source": "internal"
+  },
+  "ue4prereqsetup_x64.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Gas Station Simulator\\Engine\\Extras\\Redist\\en-us\\UE4PrereqSetup_x64.exe",
+    "source": "internal"
+  },
+  "gss2-win64-shipping.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Gas Station Simulator\\GSS2\\Binaries\\Win64\\GSS2-Win64-Shipping.exe",
+    "source": "internal"
+  },
+  "capturepro.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\CapturePro.exe",
+    "source": "internal"
+  },
+  "client_diagnose.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\client_diagnose.exe",
+    "source": "internal"
+  },
+  "marvelrivals_launcher.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\MarvelRivals_Launcher.exe",
+    "source": "internal"
+  },
+  "unicrashreporter.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\UniCrashReporter.exe",
+    "source": "internal"
+  },
+  "upload_profile.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\upload_profile.exe",
+    "source": "internal"
+  },
+  "marvel.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\MarvelGame\\Marvel.exe",
+    "source": "internal"
+  },
+  "marvel-win64-shipping.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\MarvelGame\\Marvel\\Binaries\\Win64\\Marvel-Win64-Shipping.exe",
+    "source": "internal"
+  },
+  "unisdktools.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\MarvelGame\\Marvel\\Binaries\\Win64\\UniSDKTools.exe",
+    "source": "internal"
+  },
+  "render.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\MarvelGame\\Marvel\\Binaries\\Win64\\webviewsupport.cef904430\\render.exe",
+    "source": "internal"
+  },
+  "webview_support_browser.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\MarvelGame\\Marvel\\Binaries\\Win64\\webviewsupport.cef904430\\webview_support_browser.exe",
+    "source": "internal"
+  },
+  "qtwebengineprocess.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\PySide6\\QtWebEngineProcess.exe",
+    "source": "internal"
+  },
+  "game_graphics_setter.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\MarvelRivals\\tools\\game_graphics_setter.exe",
+    "source": "internal"
+  },
+  "nfs11remastered.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\NFS11Remastered.exe",
+    "source": "internal"
+  },
+  "cleanup.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\Cleanup.exe",
+    "source": "internal"
+  },
+  "touchup.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\Touchup.exe",
+    "source": "internal"
+  },
+  "dxsetup.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\directx\\redist\\DXSETUP.EXE",
+    "source": "internal"
+  },
+  "dxwebsetup.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\directx\\redist\\DXWEBSETUP.EXE",
+    "source": "internal"
+  },
+  "eaappinstaller.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\Origin\\redist\\internal\\EAappInstaller.exe",
+    "source": "internal"
+  },
+  "vc_redist.x64.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\vc\\vc2015\\redist\\vc_redist.x64.exe",
+    "source": "internal"
+  },
+  "vc_redist.x86.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__Installer\\vc\\vc2015\\redist\\vc_redist.x86.exe",
+    "source": "internal"
+  },
+  "overlayinjector.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Need For Speed Hot Pursuit Remastered\\__overlay\\overlayinjector.exe",
+    "source": "internal"
+  },
+  "tekken 8.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\TEKKEN 8\\TEKKEN 8.exe",
+    "source": "internal"
+  },
+  "polaris-win64-shipping.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\TEKKEN 8\\Polaris\\Binaries\\Win64\\Polaris-Win64-Shipping.exe",
+    "source": "internal"
+  },
+  "eac.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Watch_Dogs2\\EAC.exe",
+    "source": "internal"
+  },
+  "ubisoftconnectinstaller.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Watch_Dogs2\\UbisoftConnectInstaller.exe",
+    "source": "internal"
+  },
+  "splashscreen.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Watch_Dogs2\\bin\\SplashScreen.exe",
+    "source": "internal"
+  },
+  "watchdogs2.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Watch_Dogs2\\bin\\WatchDogs2.exe",
+    "source": "internal"
+  },
+  "easyanticheat_setup.exe": {
+    "path": "D:\\SteamLibrary\\steamapps\\common\\Watch_Dogs2\\EasyAntiCheat\\EasyAntiCheat_Setup.exe",
+    "source": "internal"
+  },
+  "control.exe": {
+    "path": "D:\\Игры\\Control\\Control.exe",
+    "source": "internal"
+  },
+  "control_dx11.exe": {
+    "path": "D:\\Игры\\Control\\Control_DX11.exe",
+    "source": "internal"
+  },
+  "control_dx12.exe": {
+    "path": "D:\\Игры\\Control\\Control_DX12.exe",
+    "source": "internal"
+  },
+  "python.exe": {
+    "path": "C:\\Python314\\python.exe",
+    "source": "internal"
+  },
+  "pythonw.exe": {
+    "path": "C:\\Python314\\pythonw.exe",
+    "source": "internal"
+  },
+  "t32.exe": {
+    "path": "C:\\Python314\\Lib\\site-packages\\pip\\_vendor\\distlib\\t32.exe",
+    "source": "internal"
+  },
+  "t64-arm.exe": {
+    "path": "C:\\Python314\\Lib\\site-packages\\pip\\_vendor\\distlib\\t64-arm.exe",
+    "source": "internal"
+  },
+  "t64.exe": {
+    "path": "C:\\Python314\\Lib\\site-packages\\pip\\_vendor\\distlib\\t64.exe",
+    "source": "internal"
+  },
+  "w32.exe": {
+    "path": "C:\\Python314\\Lib\\site-packages\\pip\\_vendor\\distlib\\w32.exe",
+    "source": "internal"
+  },
+  "w64-arm.exe": {
+    "path": "C:\\Python314\\Lib\\site-packages\\pip\\_vendor\\distlib\\w64-arm.exe",
+    "source": "internal"
+  },
+  "w64.exe": {
+    "path": "C:\\Python314\\Lib\\site-packages\\pip\\_vendor\\distlib\\w64.exe",
+    "source": "internal"
+  },
+  "venvlauncher.exe": {
+    "path": "C:\\Python314\\Lib\\venv\\scripts\\nt\\venvlauncher.exe",
+    "source": "internal"
+  },
+  "venvwlauncher.exe": {
+    "path": "C:\\Python314\\Lib\\venv\\scripts\\nt\\venvwlauncher.exe",
+    "source": "internal"
+  },
+  "pip.exe": {
+    "path": "C:\\Python314\\Scripts\\pip.exe",
+    "source": "internal"
+  },
+  "pip3.14.exe": {
+    "path": "C:\\Python314\\Scripts\\pip3.14.exe",
+    "source": "internal"
+  },
+  "pip3.exe": {
+    "path": "C:\\Python314\\Scripts\\pip3.exe",
+    "source": "internal"
+  },
+  "x86_64-w64-mingw32-nmakehlp.exe": {
+    "path": "C:\\Python314\\tcl\\nmake\\x86_64-w64-mingw32-nmakehlp.exe",
+    "source": "internal"
+  },
+  "git-receive-pack.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\cmd\\git-receive-pack.exe",
+    "source": "internal"
+  },
+  "git-upload-pack.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\cmd\\git-upload-pack.exe",
+    "source": "internal"
+  },
+  "git.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\cmd\\git.exe",
+    "source": "internal"
+  },
+  "scalar.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\cmd\\scalar.exe",
+    "source": "internal"
+  },
+  "blocked-file-util.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\blocked-file-util.exe",
+    "source": "internal"
+  },
+  "brotli.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\brotli.exe",
+    "source": "internal"
+  },
+  "git-askpass.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-askpass.exe",
+    "source": "internal"
+  },
+  "git-askyesno.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-askyesno.exe",
+    "source": "internal"
+  },
+  "git-credential-helper-selector.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-credential-helper-selector.exe",
+    "source": "internal"
+  },
+  "git-credential-manager.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-credential-manager.exe",
+    "source": "internal"
+  },
+  "git-http-fetch.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-http-fetch.exe",
+    "source": "internal"
+  },
+  "git-http-push.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-http-push.exe",
+    "source": "internal"
+  },
+  "git-remote-http.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-remote-http.exe",
+    "source": "internal"
+  },
+  "git-remote-https.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-remote-https.exe",
+    "source": "internal"
+  },
+  "git-sh-i18n--envsubst.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\git-sh-i18n--envsubst.exe",
+    "source": "internal"
+  },
+  "headless-git.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\headless-git.exe",
+    "source": "internal"
+  },
+  "printf_gettext.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\printf_gettext.exe",
+    "source": "internal"
+  },
+  "printf_ngettext.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\printf_ngettext.exe",
+    "source": "internal"
+  },
+  "proxy-lookup.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\proxy-lookup.exe",
+    "source": "internal"
+  },
+  "psl.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\bin\\psl.exe",
+    "source": "internal"
+  },
+  "git-credential-wincred.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\libexec\\git-core\\git-credential-wincred.exe",
+    "source": "internal"
+  },
+  "git-lfs.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\libexec\\git-core\\git-lfs.exe",
+    "source": "internal"
+  },
+  "edit-git-bash.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\share\\git\\edit-git-bash.exe",
+    "source": "internal"
+  },
+  "git-wrapper.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\mingw64\\share\\git\\git-wrapper.exe",
+    "source": "internal"
+  },
+  "awk.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\awk.exe",
+    "source": "internal"
+  },
+  "b2sum.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\b2sum.exe",
+    "source": "internal"
+  },
+  "basename.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\basename.exe",
+    "source": "internal"
+  },
+  "basenc.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\basenc.exe",
+    "source": "internal"
+  },
+  "cat.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\cat.exe",
+    "source": "internal"
+  },
+  "chattr.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\chattr.exe",
+    "source": "internal"
+  },
+  "cmp.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\cmp.exe",
+    "source": "internal"
+  },
+  "comm.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\comm.exe",
+    "source": "internal"
+  },
+  "cp.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\cp.exe",
+    "source": "internal"
+  },
+  "cut.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\cut.exe",
+    "source": "internal"
+  },
+  "cygwin-console-helper.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\cygwin-console-helper.exe",
+    "source": "internal"
+  },
+  "dash.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\dash.exe",
+    "source": "internal"
+  },
+  "date.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\date.exe",
+    "source": "internal"
+  },
+  "diff.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\diff.exe",
+    "source": "internal"
+  },
+  "diff3.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\diff3.exe",
+    "source": "internal"
+  },
+  "dirname.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\dirname.exe",
+    "source": "internal"
+  },
+  "echo.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\echo.exe",
+    "source": "internal"
+  },
+  "env.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\env.exe",
+    "source": "internal"
+  },
+  "expr.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\expr.exe",
+    "source": "internal"
+  },
+  "false.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\false.exe",
+    "source": "internal"
+  },
+  "file.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\file.exe",
+    "source": "internal"
+  },
+  "find.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\find.exe",
+    "source": "internal"
+  },
+  "gencat.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\gencat.exe",
+    "source": "internal"
+  },
+  "getfacl.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\getfacl.exe",
+    "source": "internal"
+  },
+  "getopt.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\getopt.exe",
+    "source": "internal"
+  },
+  "gmondump.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\gmondump.exe",
+    "source": "internal"
+  },
+  "grep.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\grep.exe",
+    "source": "internal"
+  },
+  "head.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\head.exe",
+    "source": "internal"
+  },
+  "ls.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\ls.exe",
+    "source": "internal"
+  },
+  "lsattr.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\lsattr.exe",
+    "source": "internal"
+  },
+  "mkdir.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\mkdir.exe",
+    "source": "internal"
+  },
+  "mktemp.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\mktemp.exe",
+    "source": "internal"
+  },
+  "mv.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\mv.exe",
+    "source": "internal"
+  },
+  "newgrp.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\newgrp.exe",
+    "source": "internal"
+  },
+  "pathchk.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\pathchk.exe",
+    "source": "internal"
+  },
+  "pluginviewer.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\pluginviewer.exe",
+    "source": "internal"
+  },
+  "printf.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\printf.exe",
+    "source": "internal"
+  },
+  "profiler.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\profiler.exe",
+    "source": "internal"
+  },
+  "pwd.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\pwd.exe",
+    "source": "internal"
+  },
+  "readlink.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\readlink.exe",
+    "source": "internal"
+  },
+  "rebase.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\rebase.exe",
+    "source": "internal"
+  },
+  "rm.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\rm.exe",
+    "source": "internal"
+  },
+  "rmdir.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\rmdir.exe",
+    "source": "internal"
+  },
+  "sdiff.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\sdiff.exe",
+    "source": "internal"
+  },
+  "sed.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\sed.exe",
+    "source": "internal"
+  },
+  "sh.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\sh.exe",
+    "source": "internal"
+  },
+  "sort.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\sort.exe",
+    "source": "internal"
+  },
+  "ssh-add.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\ssh-add.exe",
+    "source": "internal"
+  },
+  "ssh-agent.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\ssh-agent.exe",
+    "source": "internal"
+  },
+  "ssh.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\ssh.exe",
+    "source": "internal"
+  },
+  "tail.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\tail.exe",
+    "source": "internal"
+  },
+  "test.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\test.exe",
+    "source": "internal"
+  },
+  "touch.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\touch.exe",
+    "source": "internal"
+  },
+  "tr.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\tr.exe",
+    "source": "internal"
+  },
+  "true.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\true.exe",
+    "source": "internal"
+  },
+  "uname.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\uname.exe",
+    "source": "internal"
+  },
+  "uniq.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\uniq.exe",
+    "source": "internal"
+  },
+  "wc.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\wc.exe",
+    "source": "internal"
+  },
+  "xargs.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\bin\\xargs.exe",
+    "source": "internal"
+  },
+  "ssh-keysign.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\lib\\ssh\\ssh-keysign.exe",
+    "source": "internal"
+  },
+  "ssh-pkcs11-helper.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\lib\\ssh\\ssh-pkcs11-helper.exe",
+    "source": "internal"
+  },
+  "ssh-sk-helper.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\lib\\ssh\\ssh-sk-helper.exe",
+    "source": "internal"
+  },
+  "getprocaddr32.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\libexec\\getprocaddr32.exe",
+    "source": "internal"
+  },
+  "getprocaddr64.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\git\\usr\\libexec\\getprocaddr64.exe",
+    "source": "internal"
+  },
+  "jxrdecapp.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\jxrlib\\jxrlib\\bin\\JxrDecApp.exe",
+    "source": "internal"
+  },
+  "heif-convert.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\libheif\\libheif\\bin\\heif-convert.exe",
+    "source": "internal"
+  },
+  "pdfinfo.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\poppler\\Library\\bin\\pdfinfo.exe",
+    "source": "internal"
+  },
+  "pdftoppm.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\poppler\\Library\\bin\\pdftoppm.exe",
+    "source": "internal"
+  },
+  "node.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\bin\\node.exe",
+    "source": "internal"
+  },
+  "fastlist-0.3.0-x64.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules\\.pnpm\\pnpm@11.7.0\\node_modules\\pnpm\\dist\\vendor\\fastlist-0.3.0-x64.exe",
+    "source": "internal"
+  },
+  "fastlist-0.3.0-x86.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\node\\node_modules\\.pnpm\\pnpm@11.7.0\\node_modules\\pnpm\\dist\\vendor\\fastlist-0.3.0-x86.exe",
+    "source": "internal"
+  },
+  "artifact_tool_rpc_daemon.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\artifact_tool_v2\\bin\\artifact_tool_rpc_daemon.exe",
+    "source": "internal"
+  },
+  "cli-32.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\cli-32.exe",
+    "source": "internal"
+  },
+  "cli-64.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\cli-64.exe",
+    "source": "internal"
+  },
+  "cli-arm64.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\cli-arm64.exe",
+    "source": "internal"
+  },
+  "cli.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\cli.exe",
+    "source": "internal"
+  },
+  "gui-32.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\gui-32.exe",
+    "source": "internal"
+  },
+  "gui-64.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\gui-64.exe",
+    "source": "internal"
+  },
+  "gui-arm64.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\gui-arm64.exe",
+    "source": "internal"
+  },
+  "gui.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Lib\\site-packages\\setuptools\\gui.exe",
+    "source": "internal"
+  },
+  "f2py.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Scripts\\f2py.exe",
+    "source": "internal"
+  },
+  "normalizer.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Scripts\\normalizer.exe",
+    "source": "internal"
+  },
+  "numpy-config.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Scripts\\numpy-config.exe",
+    "source": "internal"
+  },
+  "pdfplumber.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Scripts\\pdfplumber.exe",
+    "source": "internal"
+  },
+  "pypdfium2.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Scripts\\pypdfium2.exe",
+    "source": "internal"
+  },
+  "wheel.exe": {
+    "path": "C:\\Users\\admin\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\Scripts\\wheel.exe",
+    "source": "internal"
+  },
+  "extension-host.exe": {
+    "path": "C:\\Users\\admin\\.codex\\.tmp\\bundled-marketplaces\\openai-bundled\\plugins\\chrome\\extension-host\\windows\\x64\\extension-host.exe",
+    "source": "internal"
+  },
+  "tectonic.exe": {
+    "path": "C:\\Users\\admin\\.codex\\.tmp\\bundled-marketplaces\\openai-bundled\\plugins\\latex\\bin\\tectonic.exe",
+    "source": "internal"
+  },
+  "codex-code-mode-host.exe": {
+    "path": "C:\\Users\\admin\\.codex\\plugins\\.plugin-appserver\\codex-code-mode-host.exe",
+    "source": "internal"
+  },
+  "codex-command-runner.exe": {
+    "path": "C:\\Users\\admin\\.codex\\plugins\\.plugin-appserver\\codex-command-runner.exe",
+    "source": "internal"
+  },
+  "codex-windows-sandbox-setup.exe": {
+    "path": "C:\\Users\\admin\\.codex\\plugins\\.plugin-appserver\\codex-windows-sandbox-setup.exe",
+    "source": "internal"
+  },
+  "codex.exe": {
+    "path": "C:\\Users\\admin\\.codex\\plugins\\.plugin-appserver\\codex.exe",
+    "source": "internal"
+  },
+  "flet.exe": {
+    "path": "C:\\Users\\admin\\.flet\\client\\flet-desktop-full-0.85.3\\flet\\flet.exe",
+    "source": "internal"
+  },
+  "kimi.exe": {
+    "path": "C:\\Users\\admin\\.kimi-code\\bin\\kimi.exe",
+    "source": "internal"
+  },
+  "deno.exe": {
+    "path": "C:\\Users\\admin\\.lmstudio\\.internal\\utils\\deno.exe",
+    "source": "internal"
+  },
+  "esbuild.exe": {
+    "path": "C:\\Users\\admin\\.lmstudio\\.internal\\utils\\esbuild.exe",
+    "source": "internal"
+  },
+  "lms.exe": {
+    "path": "C:\\Users\\admin\\.lmstudio\\bin\\lms.exe",
+    "source": "internal"
+  },
+  "llama-server.exe": {
+    "path": "C:\\Users\\admin\\.lmstudio\\extensions\\backends\\llama.cpp-win-x86_64-avx2-2.24.0\\llama-server.exe",
+    "source": "internal"
+  },
+  "lmlink-connector.exe": {
+    "path": "C:\\Users\\admin\\.lmstudio\\extensions\\frameworks\\lmlink-connector-win-x86_64-avx2-0.1.0\\lmlink-connector.exe",
+    "source": "internal"
+  },
+  "avalonia.designer.hostapp.exe": {
+    "path": "C:\\Users\\admin\\.nuget\\packages\\avalonia\\11.0.0\\tools\\net461\\designer\\Avalonia.Designer.HostApp.exe",
+    "source": "internal"
+  },
+  "crossgen2.exe": {
+    "path": "C:\\Users\\admin\\.nuget\\packages\\microsoft.netcore.app.crossgen2.win-x64\\10.0.9\\tools\\crossgen2.exe",
+    "source": "internal"
+  },
+  "apphost.exe": {
+    "path": "C:\\Users\\admin\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\8.0.28\\runtimes\\win-x64\\native\\apphost.exe",
+    "source": "internal"
+  },
+  "singlefilehost.exe": {
+    "path": "C:\\Users\\admin\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\8.0.28\\runtimes\\win-x64\\native\\singlefilehost.exe",
+    "source": "internal"
+  },
+  "createdump.exe": {
+    "path": "C:\\Users\\admin\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\10.0.9\\runtimes\\win-x64\\native\\createdump.exe",
+    "source": "internal"
+  },
+  "relay_win.exe": {
+    "path": "C:\\Users\\admin\\.unity\\relay\\relay_win.exe",
+    "source": "internal"
+  },
+  "microsoft.codeanalysis.workspaces.msbuild.buildhost.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\avaloniateam.vscode-avalonia-12.3.1\\vsCodeServer\\BuildHost-net472\\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.exe",
+    "source": "internal"
+  },
+  "rg.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\continue.continue-2.0.0-win32-x64\\out\\node_modules\\@vscode\\ripgrep\\bin\\rg.exe",
+    "source": "internal"
+  },
+  "microsoft.templateengine.vscode.tool.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csdevkit-3.20.199-win32-x64\\components\\dnpsv\\platforms\\win32-x64\\node_modules\\@microsoft\\vscode.projectsystem.managed.win32-x64\\Microsoft.TemplateEngine.VSCode.Tool.exe",
+    "source": "internal"
+  },
+  "microsoft.visualstudio.code.servicehost.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csdevkit-3.20.199-win32-x64\\components\\vs-green-server\\platforms\\win32-x64\\node_modules\\@microsoft\\visualstudio-code-servicehost.win32-x64\\Microsoft.VisualStudio.Code.ServiceHost.exe",
+    "source": "internal"
+  },
+  "microsoft.visualstudio.code.servicecontroller.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csdevkit-3.20.199-win32-x64\\components\\vs-green-server\\platforms\\win32-x64\\node_modules\\@microsoft\\visualstudio-controller.win32-x64\\Microsoft.VisualStudio.Code.ServiceController.exe",
+    "source": "internal"
+  },
+  "microsoft.visualstudio.reliability.monitor.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csdevkit-3.20.199-win32-x64\\components\\vs-green-server\\platforms\\win32-x64\\node_modules\\@microsoft\\visualstudio-reliability-monitor.win32-x64\\Microsoft.VisualStudio.Reliability.Monitor.exe",
+    "source": "internal"
+  },
+  "microsoft.visualstudio.code.server.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csdevkit-3.20.199-win32-x64\\components\\vs-green-server\\platforms\\win32-x64\\node_modules\\@microsoft\\visualstudio-server.win32-x64\\Microsoft.VisualStudio.Code.Server.exe",
+    "source": "internal"
+  },
+  "vsdbg-ui.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csharp-2.140.9-win32-x64\\.debugger\\x86_64\\vsdbg-ui.exe",
+    "source": "internal"
+  },
+  "vsdbg.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csharp-2.140.9-win32-x64\\.debugger\\x86_64\\vsdbg.exe",
+    "source": "internal"
+  },
+  "microsoft.codeanalysis.languageserver.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-dotnettools.csharp-2.140.9-win32-x64\\.roslyn\\Microsoft.CodeAnalysis.LanguageServer.exe",
+    "source": "internal"
+  },
+  "inject_dll_amd64.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-python.debugpy-2026.6.0-win32-x64\\bundled\\libs\\debugpy\\_vendored\\pydevd\\pydevd_attach_to_process\\inject_dll_amd64.exe",
+    "source": "internal"
+  },
+  "inject_dll_x86.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-python.debugpy-2026.6.0-win32-x64\\bundled\\libs\\debugpy\\_vendored\\pydevd\\pydevd_attach_to_process\\inject_dll_x86.exe",
+    "source": "internal"
+  },
+  "pet.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-python.python-2026.4.0-win32-x64\\python-env-tools\\bin\\pet.exe",
+    "source": "internal"
+  },
+  "pylance-service.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-python.vscode-pylance-2026.3.1\\dist\\bundled\\bin\\win32-arm64\\pylance-service.exe",
+    "source": "internal"
+  },
+  "cpptools-srv.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\bin\\cpptools-srv.exe",
+    "source": "internal"
+  },
+  "cpptools.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\bin\\cpptools.exe",
+    "source": "internal"
+  },
+  "opendebugad7.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\debugAdapters\\bin\\OpenDebugAD7.exe",
+    "source": "internal"
+  },
+  "windowsdebuglauncher.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\debugAdapters\\bin\\WindowsDebugLauncher.exe",
+    "source": "internal"
+  },
+  "vsdebugconsole.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\debugAdapters\\vsdbg\\bin\\VsDebugConsole.exe",
+    "source": "internal"
+  },
+  "msvsmon.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\debugAdapters\\vsdbg\\bin\\Remote Debugger\\x86\\msvsmon.exe",
+    "source": "internal"
+  },
+  "clang-format.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\LLVM\\bin\\clang-format.exe",
+    "source": "internal"
+  },
+  "clang-tidy.exe": {
+    "path": "C:\\Users\\admin\\.vscode\\extensions\\ms-vscode.cpptools-1.32.2-win32-x64\\LLVM\\bin\\clang-tidy.exe",
+    "source": "internal"
+  },
+  "selflearningapp.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\AvaloniaUI\\com.AvaloniaUI.Net.VisualStudioCode\\Previewer\\Zeus_xBtEekDDdO0B7So4\\SelfLearningApp.exe",
+    "source": "internal"
+  },
+  "cloudcode_cli.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\cloud-code\\cloudcode_cli\\cloudcode_cli\\5c171477\\cloudcode_cli.exe",
+    "source": "internal"
+  },
+  "update.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Discord\\Update.exe",
+    "source": "internal"
+  },
+  "discord.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Discord\\app-1.0.9252\\Discord.exe",
+    "source": "internal"
+  },
+  "discordsystemhelper.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Discord\\app-1.0.9252\\modules\\discord_utils-1\\discord_utils\\DiscordSystemHelper.exe",
+    "source": "internal"
+  },
+  "audio_effects_helper.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Discord\\app-1.0.9252\\modules\\discord_voice-1\\discord_voice\\audio_effects_helper.exe",
+    "source": "internal"
+  },
+  "gpu_encoder_helper.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Discord\\app-1.0.9252\\modules\\discord_voice-1\\discord_voice\\gpu_encoder_helper.exe",
+    "source": "internal"
+  },
+  "pyrsa-decrypt.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\pyrsa-decrypt.exe",
+    "source": "internal"
+  },
+  "pyrsa-encrypt.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\pyrsa-encrypt.exe",
+    "source": "internal"
+  },
+  "pyrsa-keygen.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\pyrsa-keygen.exe",
+    "source": "internal"
+  },
+  "pyrsa-priv2pub.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\pyrsa-priv2pub.exe",
+    "source": "internal"
+  },
+  "pyrsa-sign.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\pyrsa-sign.exe",
+    "source": "internal"
+  },
+  "pyrsa-verify.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\pyrsa-verify.exe",
+    "source": "internal"
+  },
+  "websockets.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\GOG.com\\Galaxy\\plugins\\installed\\steam_ca27391f-2675-49b1-92c0-896d43afa4f8\\bin\\websockets.exe",
+    "source": "internal"
+  },
+  "installer.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\hydralauncher-updater\\installer.exe",
+    "source": "internal"
+  },
+  "hydralauncher-4.1.1-setup.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\hydralauncher-updater\\pending\\hydralauncher-4.1.1-setup.exe",
+    "source": "internal"
+  },
+  "nvoawrappercache.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\NVIDIA Corporation\\NVIDIA App\\NvBackend\\ApplicationOntology\\NvOAWrapperCache.exe",
+    "source": "internal"
+  },
+  "oawrapper.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\NVIDIA Corporation\\NVIDIA App\\NvBackend\\ApplicationOntology\\OAWrapper.exe",
+    "source": "internal"
+  },
+  "node_repl.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\03b1cdac8af3a530\\bin\\node_repl.exe",
+    "source": "internal"
+  },
+  "codex-computer-use.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\03b1cdac8af3a530\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe",
+    "source": "internal"
+  },
+  "python-3.14.6-amd64.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Package Cache\\{7116a5c9-3a0e-4d9c-aa8b-c6f909dc9278}\\python-3.14.6-amd64.exe",
+    "source": "internal"
+  },
+  "redlauncher.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\CD Projekt Red\\REDlauncher\\REDlauncher.exe",
+    "source": "internal"
+  },
+  "redupdater.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\CD Projekt Red\\REDlauncher\\REDupdater.exe",
+    "source": "internal"
+  },
+  "unins000.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\CD Projekt Red\\REDlauncher\\unins000.exe",
+    "source": "internal"
+  },
+  "cursor.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\Cursor.exe",
+    "source": "internal"
+  },
+  "code-tunnel.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin\\code-tunnel.exe",
+    "source": "internal"
+  },
+  "cursor-tunnel.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin\\cursor-tunnel.exe",
+    "source": "internal"
+  },
+  "winpty-agent.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\resources\\app\\node_modules\\node-pty\\build\\Release\\winpty-agent.exe",
+    "source": "internal"
+  },
+  "openconsole.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\resources\\app\\node_modules\\node-pty\\build\\Release\\conpty\\OpenConsole.exe",
+    "source": "internal"
+  },
+  "crepectl.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\crepectl.exe",
+    "source": "internal"
+  },
+  "cursorsandbox.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\resources\\app\\resources\\helpers\\cursorsandbox.exe",
+    "source": "internal"
+  },
+  "inno_updater.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\cursor\\tools\\inno_updater.exe",
+    "source": "internal"
+  },
+  "code.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+    "source": "internal"
+  },
+  "tgrep.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\extensions\\copilot\\node_modules\\@github\\copilot\\sdk\\tgrep\\bin\\win32-x64\\tgrep.exe",
+    "source": "internal"
+  },
+  "mxc-diagnostic-console.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\mxc-diagnostic-console.exe",
+    "source": "internal"
+  },
+  "winhttp-proxy-shim.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\winhttp-proxy-shim.exe",
+    "source": "internal"
+  },
+  "wxc-exec.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\wxc-exec.exe",
+    "source": "internal"
+  },
+  "wxc-host-prep.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\wxc-host-prep.exe",
+    "source": "internal"
+  },
+  "wxc-test-proxy.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\wxc-test-proxy.exe",
+    "source": "internal"
+  },
+  "wxc-windows-sandbox-daemon.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\wxc-windows-sandbox-daemon.exe",
+    "source": "internal"
+  },
+  "wxc-windows-sandbox-guest.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@microsoft\\mxc-sdk\\bin\\x64\\wxc-windows-sandbox-guest.exe",
+    "source": "internal"
+  },
+  "vsce-sign.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Microsoft VS Code\\a5b5009513\\resources\\app\\node_modules.asar.unpacked\\@vscode\\vsce-sign\\bin\\vsce-sign.exe",
+    "source": "internal"
+  },
+  "ollama app.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Ollama\\ollama app.exe",
+    "source": "internal"
+  },
+  "ollama.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Ollama\\ollama.exe",
+    "source": "internal"
+  },
+  "llama-quantize.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-quantize.exe",
+    "source": "internal"
+  },
+  "opera.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\opera.exe",
+    "source": "internal"
+  },
+  "installer_helper_64.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\133.0.5932.109\\installer_helper_64.exe",
+    "source": "internal"
+  },
+  "notification_helper.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\133.0.5932.109\\notification_helper.exe",
+    "source": "internal"
+  },
+  "opera_crashreporter.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\133.0.5932.109\\opera_crashreporter.exe",
+    "source": "internal"
+  },
+  "opera_gx_splash.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\133.0.5932.109\\opera_gx_splash.exe",
+    "source": "internal"
+  },
+  "assistant_installer.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\assistant\\assistant_installer.exe",
+    "source": "internal"
+  },
+  "browser_assistant.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\assistant\\browser_assistant.exe",
+    "source": "internal"
+  },
+  "opera_autoupdate.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Programs\\Opera GX\\autoupdate\\opera_autoupdate.exe",
+    "source": "internal"
+  },
+  "devcon.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\devcon.exe",
+    "source": "internal"
+  },
+  "devcon64.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\devcon64.exe",
+    "source": "internal"
+  },
+  "toolsdriverinstall.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\ToolsDriverInstall.exe",
+    "source": "internal"
+  },
+  "toolsdriveruninstall.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\ToolsDriverUninstall.exe",
+    "source": "internal"
+  },
+  "occtautoupdate.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\AutoUpdate\\OcctAutoUpdate.exe",
+    "source": "internal"
+  },
+  "linpack.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\CPULINPACK\\2012\\linpack.exe",
+    "source": "internal"
+  },
+  "cpuocct64.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\CPUOCCT\\CpuOcct64.exe",
+    "source": "internal"
+  },
+  "gpumemtest.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\GPUMEMTEST\\GpuMemtest.exe",
+    "source": "internal"
+  },
+  "gpu3d.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\GPUUNREAL5\\gpu3d.exe",
+    "source": "internal"
+  },
+  "gpu3d-win64-shipping.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\GPUUNREAL5\\gpu3d\\Binaries\\Win64\\gpu3d-Win64-Shipping.exe",
+    "source": "internal"
+  },
+  "occtmemtest.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\MEMTEST\\OcctMemtest.exe",
+    "source": "internal"
+  },
+  "occtgui.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\Resources\\OCCTGUI.exe",
+    "source": "internal"
+  },
+  "diskspd.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\OCCT\\Resources\\STORAGE\\diskspd.exe",
+    "source": "internal"
+  },
+  "asusinstallverifier.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\Patriot\\Aac_Patriot Viper M2 SSD RGB\\AsusInstallVerifier.exe",
+    "source": "internal"
+  },
+  "codesetup-stable-a5b500951314efd502d07465bd138dfbd714a960.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\vscode-stable-user-x64\\CodeSetup-stable-a5b500951314efd502d07465bd138dfbd714a960.exe",
+    "source": "internal"
+  },
+  "vs_buildtools.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\WinGet\\Microsoft.VisualStudio.2022.BuildTools.17.14.36\\vs_BuildTools.exe",
+    "source": "internal"
+  },
+  "un_a.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\Temp\\~nsu.tmp\\Un_A.exe",
+    "source": "internal"
+  },
+  "unityhubsetup-3.19.5-x64.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\unityhub-updater\\pending\\UnityHubSetup-3.19.5-x64.exe",
+    "source": "internal"
+  },
+  "unrealtraceserver.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\UnrealEngine\\Common\\UnrealTrace\\Bin\\00010018\\UnrealTraceServer.exe",
+    "source": "internal"
+  },
+  "crashpad_handler.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\UnrealEngine\\Common\\Zen\\Install\\crashpad_handler.exe",
+    "source": "internal"
+  },
+  "oidctoken.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\UnrealEngine\\Common\\Zen\\Install\\OidcToken.exe",
+    "source": "internal"
+  },
+  "zen.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\UnrealEngine\\Common\\Zen\\Install\\zen.exe",
+    "source": "internal"
+  },
+  "zenserver.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Local\\UnrealEngine\\Common\\Zen\\Install\\zenserver.exe",
+    "source": "internal"
+  },
+  "dotnet.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Code\\User\\globalStorage\\ms-dotnettools.vscode-dotnet-runtime\\.dotnet\\10.0.9~x64~aspnetcore\\dotnet.exe",
+    "source": "internal"
+  },
+  "directx_jun2010_redist.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\hydralauncher\\CommonRedist\\directx_Jun2010_redist.exe",
+    "source": "internal"
+  },
+  "dotnetfx40_full_setup.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\hydralauncher\\CommonRedist\\dotNetFx40_Full_setup.exe",
+    "source": "internal"
+  },
+  "oalinst.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\hydralauncher\\CommonRedist\\oalinst.exe",
+    "source": "internal"
+  },
+  "visualcppredist_aio_x86_x64.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\hydralauncher\\CommonRedist\\VisualCppRedist_AIO_x86_x64.exe",
+    "source": "internal"
+  },
+  "ludusavi.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\hydralauncher\\ludusavi\\ludusavi.exe",
+    "source": "internal"
+  },
+  "cffi-gen-src.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\cffi-gen-src.exe",
+    "source": "internal"
+  },
+  "clear_comtypes_cache.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\clear_comtypes_cache.exe",
+    "source": "internal"
+  },
+  "dotenv.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\dotenv.exe",
+    "source": "internal"
+  },
+  "fastapi.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\fastapi.exe",
+    "source": "internal"
+  },
+  "httpx.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\httpx.exe",
+    "source": "internal"
+  },
+  "idna.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\idna.exe",
+    "source": "internal"
+  },
+  "piper.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\piper.exe",
+    "source": "internal"
+  },
+  "pipwin.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pipwin.exe",
+    "source": "internal"
+  },
+  "py.test.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\py.test.exe",
+    "source": "internal"
+  },
+  "pygmentize.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pygmentize.exe",
+    "source": "internal"
+  },
+  "pyi-archive_viewer.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pyi-archive_viewer.exe",
+    "source": "internal"
+  },
+  "pyi-bindepend.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pyi-bindepend.exe",
+    "source": "internal"
+  },
+  "pyi-grab_version.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pyi-grab_version.exe",
+    "source": "internal"
+  },
+  "pyi-makespec.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pyi-makespec.exe",
+    "source": "internal"
+  },
+  "pyi-set_version.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pyi-set_version.exe",
+    "source": "internal"
+  },
+  "pyinstaller.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pyinstaller.exe",
+    "source": "internal"
+  },
+  "pytest.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pytest.exe",
+    "source": "internal"
+  },
+  "pywin32_postinstall.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pywin32_postinstall.exe",
+    "source": "internal"
+  },
+  "pywin32_testall.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\pywin32_testall.exe",
+    "source": "internal"
+  },
+  "sprc.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\sprc.exe",
+    "source": "internal"
+  },
+  "tqdm.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\tqdm.exe",
+    "source": "internal"
+  },
+  "uvicorn.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\uvicorn.exe",
+    "source": "internal"
+  },
+  "vosk-transcriber.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\vosk-transcriber.exe",
+    "source": "internal"
+  },
+  "watchfiles.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\watchfiles.exe",
+    "source": "internal"
+  },
+  "watchmedo.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\Scripts\\watchmedo.exe",
+    "source": "internal"
+  },
+  "run.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\run.exe",
+    "source": "internal"
+  },
+  "runw.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe",
+    "source": "internal"
+  },
+  "runw_d.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw_d.exe",
+    "source": "internal"
+  },
+  "run_d.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\run_d.exe",
+    "source": "internal"
+  },
+  "pythonwin.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\pythonwin\\Pythonwin.exe",
+    "source": "internal"
+  },
+  "flac-win32.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\speech_recognition\\flac-win32.exe",
+    "source": "internal"
+  },
+  "pythonservice.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Python\\Python314\\site-packages\\win32\\pythonservice.exe",
+    "source": "internal"
+  },
+  "telegram.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Telegram Desktop\\Telegram.exe",
+    "source": "internal"
+  },
+  "updater.exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\Telegram Desktop\\Updater.exe",
+    "source": "internal"
+  },
+  "unitysetup64-6000.5.1f1 (1).exe": {
+    "path": "C:\\Users\\admin\\AppData\\Roaming\\UnityHub\\downloads\\UnitySetup64-6000.5.1f1 (1).exe",
+    "source": "internal"
+  },
+  "occt.exe": {
+    "path": "C:\\Users\\admin\\Desktop\\OCCT.exe",
+    "source": "internal"
+  },
+  "zeus.exe": {
+    "path": "C:\\Users\\admin\\Desktop\\Проекты\\Zeus v1.1\\dist\\Zeus.exe",
+    "source": "internal"
+  },
+  "anydesk.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\AnyDesk.exe",
+    "source": "internal"
+  },
+  "cursorusersetup-x64-3.9.16.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\CursorUserSetup-x64-3.9.16.exe",
+    "source": "internal"
+  },
+  "dotnet-sdk-10.0.301-win-x64.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\dotnet-sdk-10.0.301-win-x64.exe",
+    "source": "internal"
+  },
+  "gog_galaxy_2.0.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\GOG_Galaxy_2.0.exe",
+    "source": "internal"
+  },
+  "lm-studio-0.4.19-2-x64.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\LM-Studio-0.4.19-2-x64.exe",
+    "source": "internal"
+  },
+  "processlassosetup64.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\processlassosetup64.exe",
+    "source": "internal"
+  },
+  "vscodeusersetup-x64-1.127.0.exe": {
+    "path": "C:\\Users\\admin\\Downloads\\VSCodeUserSetup-x64-1.127.0.exe",
+    "source": "internal"
+  },
+  "codex-acp.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.ai.assistant@6fee27370e6a\\RelayApp~\\gateway\\codex-acp.exe",
+    "source": "internal"
+  },
+  "rg_win.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.ai.assistant@6fee27370e6a\\ThirdParty~\\ripgrep\\rg_win.exe",
+    "source": "internal"
+  },
+  "bcl.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38\\.Runtime\\bcl.exe",
+    "source": "internal"
+  },
+  "burst-lld-19-hostwin-arm64.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38\\.Runtime\\burst-lld-19-hostwin-arm64.exe",
+    "source": "internal"
+  },
+  "burst-lld-19-hostwin.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38\\.Runtime\\burst-lld-19-hostwin.exe",
+    "source": "internal"
+  },
+  "dsymutil.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38\\.Runtime\\hostwin\\dsymutil.exe",
+    "source": "internal"
+  },
+  "llvm-lipo.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38\\.Runtime\\hostwin\\llvm-lipo.exe",
+    "source": "internal"
+  },
+  "vswhere.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.burst@6bb9aca3ef38\\.Runtime\\hostwin\\vswhere.exe",
+    "source": "internal"
+  },
+  "comintegration.exe": {
+    "path": "C:\\Users\\admin\\Setup Guide In-Editor Tutorial\\Library\\PackageCache\\com.unity.ide.visualstudio@a99d56dec63f\\Editor\\COMIntegration\\Release\\COMIntegration.exe",
+    "source": "internal"
+  }
+}

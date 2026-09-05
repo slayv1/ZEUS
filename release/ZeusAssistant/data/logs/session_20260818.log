@@ -1,0 +1,8 @@
+[15:28:07] COMMAND(voice) OK: зевса
+[15:28:17] LLM_OK(llm) OK action=chat: Мой сын! Ты - Геракл, великий герой!
+[15:29:02] COMMAND(voice) OK: запусти кэсс два
+[15:29:02] SYSTEM(system) ERR action=not_found: Не нашёл 'кэсс два' в списке команд. Добавьте его в commands.json или скажите 'найди кэсс два'.
+[15:29:48] COMMAND(voice) OK: запусти контра страйк два
+[15:29:48] SYSTEM(system) ERR action=not_found: Не нашёл 'контра страйк два' в списке команд. Добавьте его в commands.json или скажите 'найди контра страйк два'.
+[15:47:04] COMMAND(voice) OK: запусти контра страйк два
+[15:47:04] SYSTEM(system) ERR action=not_found: Не нашёл 'контра страйк два' в списке команд. Добавьте его в commands.json или скажите 'найди контра страйк два'.

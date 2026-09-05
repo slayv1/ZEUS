@@ -1,0 +1,8 @@
+[09:31:53] COMMAND(voice) OK: Зевс
+[09:31:56] LLM_OK(llm) OK action=chat: Мой сын... Аполлон.
+[09:32:42] COMMAND(voice) OK: Запусти cs2
+[09:32:42] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[09:48:45] COMMAND(voice) OK: Запусти cs2
+[09:48:45] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
+[09:54:41] COMMAND(voice) OK: Запусти cs2
+[09:54:41] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.

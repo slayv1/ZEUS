@@ -1,0 +1,5 @@
+128 INFO: PyInstaller: 6.21.0, contrib hooks: 2026.6
+129 INFO: Python: 3.14.6
+161 INFO: Platform: Windows-11-10.0.26200-SP0
+162 INFO: Python environment: C:\Python314
+553 WARNING: Failed to collect submodules for 'flet.testing' because importing 'flet.testing' raised: ModuleNotFoundError: No module named 'skimage'
