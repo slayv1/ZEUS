@@ -275,6 +275,10 @@ def scan_if_needed(force: bool = False) -> dict[str, Any]:
     if not force and _SCAN_MTIME_CACHE.get(key):
         return {"skipped": True, "added_apps": [], "added_games": [], "updated": False}
     res = scan_and_update()
+    # Хранить имеет смысл только факт «текущее состояние источников уже
+    # отсканировано»: все прошлые ключи (прежние mtime) никогда не понадобятся.
+    # Чистим словарь, иначе он бесконечно растёт за время работы приложения.
+    _SCAN_MTIME_CACHE.clear()
     _SCAN_MTIME_CACHE[key] = True
     return res
 

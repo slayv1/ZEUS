@@ -54,6 +54,55 @@ _tts_lock = threading.Lock()
 _tts_engine = None
 
 
+class AudioListenerThread(threading.Thread):
+    """Daemon-поток непрерывного распознавания команд."""
+
+    def __init__(self, engine: "AudioEngine"):
+        super().__init__(target=engine._listen_loop, daemon=True, name="zeus-audio-listener")
+        self.engine = engine
+
+    def stop(self) -> None:
+        self.engine._listen_running = False
+
+
+class ModelLoaderThread(threading.Thread):
+    """Последовательно прогревает Vosk и Piper вне GUI-потока."""
+
+    def __init__(self, engine: "AudioEngine", on_progress=None, on_complete=None):
+        super().__init__(daemon=True, name="zeus-model-loader")
+        self.engine = engine
+        self.on_progress = on_progress
+        self.on_complete = on_complete
+
+    def run(self) -> None:
+        success = True
+        try:
+            if self.on_progress:
+                self.on_progress("Загрузка модели Vosk…")
+            if self.engine.wake.available:
+                self.engine.wake._ensure_loaded()
+                success = bool(self.engine.wake._loaded) and success
+            if self.on_progress:
+                self.on_progress("Модель Vosk загружена")
+        except Exception as exc:  # noqa: BLE001
+            success = False
+            if self.on_progress:
+                self.on_progress(f"Ошибка Vosk: {exc}")
+        try:
+            if self.on_progress:
+                self.on_progress("Загрузка Piper TTS…")
+            from modules.tts_piper import prewarm
+            success = bool(prewarm()) and success
+            if self.on_progress:
+                self.on_progress("Piper TTS загружен")
+        except Exception as exc:  # noqa: BLE001
+            success = False
+            if self.on_progress:
+                self.on_progress(f"Piper недоступен: {exc}")
+        if self.on_complete:
+            self.on_complete(success)
+
+
 # Фразы-паразиты — «хвост» распознавания (а уж, изу, ну…). Такие обрывки Vosk
 # НЕ считаются командой и не должны сбрасывать сессию активного прослушивания
 # в спящий режим — слушаем пользователя дальше.
@@ -426,12 +475,19 @@ class AudioEngine:
 
         threading.Thread(target=_prewarm, daemon=True, name="zeus-tts-prewarm").start()
 
+    def load_models_background(self, on_progress=None, on_complete=None):
+        """Загружает Vosk и Piper последовательно в отдельном daemon-потоке."""
+        self._model_loader_thread = ModelLoaderThread(
+            self, on_progress=on_progress, on_complete=on_complete
+        )
+        self._model_loader_thread.start()
+
     def _start_full_listen(self):
         """Запускает полное распознавание речи (тяжёлый Active-режим)."""
         if self._listen_running:
             return
         self._listen_running = True
-        self._listen_thread = threading.Thread(target=self._listen_loop, daemon=True)
+        self._listen_thread = AudioListenerThread(self)
         self._listen_thread.start()
         print("[AudioEngine] Полное прослушивание запущено (Active)")
 
@@ -717,31 +773,40 @@ class AudioEngine:
     def _check_sleep_commands(self, text: str) -> bool:
         """Проверяет текст на команды 'включись/отключись'.
 
+        Матчинг пословный (regex-границы слов), без ложных срабатываний
+        на случайных подстроках. Раньше внешний any() содержал «сырой»
+        элемент «зеве», который совпадал с любой фразой, где упоминается
+        Зевс, и лишь маскировал реальную проверку внутри.
+
         Returns:
             True если это команда спящего режима (текст уже обработан)
         """
-        text_lower = text.lower().strip()
+        text_lower = (text or "").lower().strip()
+        if not text_lower:
+            return False
+        import re as _re
+
+        def _has(word: str) -> bool:
+            return bool(_re.search(rf"(?<!\w){_re.escape(word)}(?!\w)", text_lower))
 
         # Команды отключения
-        if any(w in text_lower for w in ["зеве отключись", "зеве", "отключись", "зеве усни", "усни"]):
-            if "отключись" in text_lower or "усни" in text_lower:
-                self.is_active = False
-                msg = "Зевс отключён, сэр. Чтобы включить, скажите «Зевс, включись»."
-                print(f"[AudioEngine] {msg}")
-                if self.on_command:
-                    # Отправляем как системное сообщение
-                    self.on_command("__SLEEP_OFF__")
-                return True
+        if _has("отключись") or _has("усни"):
+            self.is_active = False
+            msg = "Зевс отключён, сэр. Чтобы включить, скажите «Зевс, включись»."
+            print(f"[AudioEngine] {msg}")
+            if self.on_command:
+                # Отправляем как системное сообщение
+                self.on_command("__SLEEP_OFF__")
+            return True
 
-        # Команды включения
-        if any(w in text_lower for w in ["зеве включись", "зеве проснись", "проснись", "вернись"]):
-            if not self.is_active:
-                self.is_active = True
-                msg = "Зевс активирован, сэр. Чем могу помочь?"
-                print(f"[AudioEngine] {msg}")
-                if self.on_command:
-                    self.on_command("__SLEEP_ON__")
-                return True
+        # Команды включения (только если сейчас спим — иначе это обычная фраза)
+        if (_has("включись") or _has("проснись") or _has("вернись")) and not self.is_active:
+            self.is_active = True
+            msg = "Зевс активирован, сэр. Чем могу помочь?"
+            print(f"[AudioEngine] {msg}")
+            if self.on_command:
+                self.on_command("__SLEEP_ON__")
+            return True
 
         return False
 

@@ -212,6 +212,46 @@ def _commands_path() -> str:
     return config.data_path("commands.json")
 
 
+def _commands_map_path() -> str:
+    """Возвращает путь к модульному словарю команд и синонимов."""
+    return config.data_path("commands_map.json")
+
+
+_COMMAND_ALIASES: dict[str, str] | None = None
+
+
+def _load_command_aliases() -> dict[str, str]:
+    """Загружает синонимы команд из commands_map.json с безопасным fallback."""
+    global _COMMAND_ALIASES
+    if _COMMAND_ALIASES is not None:
+        return _COMMAND_ALIASES
+    aliases: dict[str, str] = {}
+    try:
+        with open(_commands_map_path(), "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for canonical, entry in data.items():
+            for alias in entry.get("aliases", []) if isinstance(entry, dict) else []:
+                aliases[str(alias).lower()] = str(canonical).lower()
+    except (OSError, ValueError, AttributeError):
+        pass
+    _COMMAND_ALIASES = aliases
+    return aliases
+
+
+def _normalize_command_aliases(text: str) -> str:
+    """Заменяет синонимы на канонические глаголы перед разбором команды."""
+    normalized = text
+    aliases = _load_command_aliases()
+    for alias in sorted(aliases, key=len, reverse=True):
+        normalized = re.sub(
+            rf"(?<!\w){re.escape(alias)}(?!\w)",
+            aliases[alias],
+            normalized,
+            flags=re.IGNORECASE,
+        )
+    return normalized
+
+
 # Кеш commands.json: файл перечитывается ТОЛЬКО при изменении mtime,
 # а не при каждом вызове load_commands() («при каждом чихе»).
 _CMDS_CACHE: dict[str, Any] | None = None
@@ -257,8 +297,9 @@ def reload_commands() -> dict[str, Any]:
     reload_commands() — документированная точка перезагрузки/валидации, которая
     вызывается файловым наблюдателем при сохранении commands.json.
     """
-    global _CMDS_CACHE_MTIME
+    global _CMDS_CACHE_MTIME, _COMMAND_ALIASES
     _CMDS_CACHE_MTIME = -1.0  # форс-перечитывание при следующем вызове
+    _COMMAND_ALIASES = None
     try:
         data = load_commands()
         apps = data.get("приложения", {})
@@ -1060,6 +1101,7 @@ def execute_command(text: str) -> dict[str, Any] | None:
 
     Возвращает None, если текст не содержит командных ключевых слов.
     """
+    text = _normalize_command_aliases(text)
     text_lower = text.lower()
 
     # --- Этап 12: ответ на вопрос о сканировании нового носителя ---

@@ -27,6 +27,7 @@ for _p in (_SRC_ROOT, _THIS_DIR):
 from core import config
 from core.config import THEMES
 from core.file_watcher import start_watching, stop_watching
+from modules.tray import TrayManager
 
 # ВАЖНО: ZeusController НЕ импортируем на уровне модуля — его цепочка
 # (vosk, sounddevice, piper, pyaudio) загружается секунды и откладывала
@@ -172,6 +173,8 @@ class ZeusUI:
 
         self._watcher_started = False
         self._hotkey = None
+        self._tray = None
+        self._exit_requested = False
 
         # Мгновенный «сплэш» загрузки: UI отрисовывается сразу, а не после
         # инициализации движков. Окно не зависает на надписи «Загрузка…».
@@ -323,7 +326,7 @@ class ZeusUI:
         self._build_ui()
         self._setup_controller()
         self._init_file_watcher()
-        self._start_hotkey()
+        self._start_tray()
 
     def _timeout_guard(self) -> None:
         """Стражник: если загрузка затянулась — сообщаем и продолжаем ждать."""
@@ -346,8 +349,78 @@ class ZeusUI:
         """
         started = start_watching(callback=self._on_file_event)
         self._watcher_started = started
-        # Гарантированно останавливаем наблюдатель при закрытии окна
-        self.page.on_window_event = self._on_window_event
+        # Перехватываем крестик: закрытие должно скрывать окно, а не завершать
+        # процесс, чтобы горячие клавиши и голосовой режим продолжали работать.
+        self.page.window.prevent_close = True
+        self._attach_window_event_handler()
+
+    def _start_tray(self) -> None:
+        """Запускает иконку трея после готовности Flet-интерфейса."""
+        try:
+            self._tray = TrayManager(
+                on_open=lambda: self._post_ui(self._show_window),
+                on_settings=lambda: self._post_ui(
+                    lambda: self._select_section(2)
+                ),
+                on_exit=lambda: self._post_ui(self._exit_application),
+                icon_path=config.resource_path("assets/icons/app_icon.ico"),
+            )
+            if self._tray.start():
+                self._log("☰ Иконка Zeus добавлена в системный трей")
+            else:
+                self._tray = None
+        except Exception as exc:  # noqa: BLE001
+            self._tray = None
+            self._log(f"☰ Системный трей недоступен: {exc}")
+
+    def _close_window(self) -> None:
+        """Программно закрывает окно (совместимо с async-API Flet).
+
+        Требование ТЗ (чек-лист №4): ``prevent_close`` сбрасывается ПЕРЕД
+        close(), иначе Flet перехватит программное закрытие и снова пришлёт
+        событие «close» (риск бесконечного цикла).
+
+        Нюанс: в Flet 0.85+ ``Window.close()`` — корутина, поэтому прямой
+        вызов «в лоб» создаст объект-корутину, который никогда не выполнится
+        (окно не закроется). Корутина запускается через ``page.run_task()``;
+        для синхронных версий API вызывается напрямую.
+        """
+        import inspect
+
+        window = self.page.window
+        try:
+            window.prevent_close = False
+        except Exception:
+            pass
+        close = getattr(window, "close", None)
+        if close is None:
+            return
+        if inspect.iscoroutinefunction(close):
+            self.page.run_task(close)
+        else:
+            close()
+
+    def _exit_application(self) -> None:
+        """Полное завершение работы приложения из трея (пункт «Выход»)."""
+        self._exit_requested = True
+        self._shutdown_background_services()
+        try:
+            self._close_window()
+        except Exception:
+            try:
+                self.page.window.visible = False
+            except Exception:
+                pass
+
+    def _shutdown_background_services(self) -> None:
+        """Останавливает трей, watcher и анимацию."""
+        if self._tray is not None:
+            self._tray.stop()
+            self._tray = None
+        if self._watcher_started:
+            stop_watching()
+            self._watcher_started = False
+        self._holo_running = False
 
     def _on_file_event(self, event: dict):
         """Коллбэк watchdog: логирует изменение файла в панель логов."""
@@ -366,26 +439,65 @@ class ZeusUI:
         }.get(ev, ev)
         self._log(f"{label}: {os.path.basename(path)} [{ts}]")
 
-    def _on_window_event(self, event):
-        """Останавливает фоновые ресурсы (watcher, хоткей) при закрытии окна.
-        
+    def _attach_window_event_handler(self) -> None:
+        """Привязывает обработчик событий окна к API установленной версии Flet.
+
+        КЛЮЧЕВОЙ ФИКС: в Flet >= 0.85 события окна живут в
+        ``page.window.on_event`` (объект WindowEvent с полем ``type``),
+        а атрибут ``page.on_window_event`` из старых версий удалён.
+        Ранее мы присваивали обработчик несуществующему атрибуту —
+        событие закрытия не доходило до _on_window_event, крестик
+        блокировался prevent_close, и окно было невозможно закрыть.
+        Для совместимости со старыми версиями привязываем оба канала.
+        """
+        window = getattr(self.page, "window", None)
+        if window is not None and hasattr(window, "on_event"):
+            window.on_event = self._on_window_event
+        if hasattr(self.page, "on_window_event"):
+            # Старые версии Flet (< 0.85)
+            self.page.on_window_event = self._on_window_event
+
+    @staticmethod
+    def _window_event_name(event) -> str:
+        """Нормализует событие окна к строковому имени ('close', 'resize', …).
+
+        Flet >= 0.85: WindowEvent.type — enum WindowEventType (значение 'close').
+        Старые версии: событие с строковым полем .data.
+        """
+        data = getattr(event, "data", None)
+        if isinstance(data, str) and data:
+            return data
+        etype = getattr(event, "type", None)
+        if etype is not None:
+            return str(getattr(etype, "value", etype))
+        return ""
+
+    def _on_window_event(self, event) -> None:
+        """Управляет поведением окна: крестик прячет в трей, а выход — закрывает.
+
         Также обрабатывает события максимизации/восстановления для корректного
         обновления layout при изменении размера окна.
         """
         try:
-            if event.data == "close":
-                if self._watcher_started:
-                    stop_watching()
-                    self._watcher_started = False
-                if self._hotkey is not None:
-                    try:
-                        self._hotkey.stop()
-                    except Exception:
-                        pass
-                    self._hotkey = None
-                # Останавливаем поток анимации голографического визуализатора
-                self._holo_running = False
-            elif event.data in ("maximize", "unmaximize", "resize"):
+            name = self._window_event_name(event)
+            if name == "close":
+                # Проверяем, был ли запрошен принудительный выход (например,
+                # пункт «Выход» в контекстном меню трея).
+                if getattr(self, "_exit_requested", False):
+                    self._shutdown_background_services()
+                    self._close_window()
+                elif self._tray is None:
+                    # Трей недоступен — прятать окно нельзя: вернуть его на
+                    # экран и завершить процесс будет нечем (зомби-процесс).
+                    self._exit_requested = True
+                    self._close_window()
+                else:
+                    # Обычный крестик (X) — просто скрываем окно в трей,
+                    # фоновые процессы и трей продолжают работать.
+                    self.page.window.visible = False
+                    self.page.update()
+                    self._log("Окно свернуто в системный трей")
+            elif name in ("maximize", "unmaximize", "resize"):
                 # Принудительно обновляем layout при изменении размера окна
                 try:
                     if hasattr(self, "_root") and self._root is not None:
@@ -393,46 +505,123 @@ class ZeusUI:
                     self.page.update()
                 except Exception:
                     pass
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Ошибка в _on_window_event: {e}")
 
     # ------------------------------------------------------------------
     # Глобальная горячая клавиша (Ctrl+Alt+Space)
     # ------------------------------------------------------------------
     def _start_hotkey(self):
-        """Регистрирует Ctrl+Alt+Space для принудительного вызова ассистента."""
-        if not self.controller.settings.get("app_settings", {}).get("hotkey_enabled", True):
+        """Регистрирует системный toggle и быстрый вызов ассистента."""
+        app_settings = self.controller.settings.get("app_settings", {})
+        if not app_settings.get(
+            "global_hotkey_enabled", app_settings.get("hotkey_enabled", True)
+        ):
             self._log("Горячая клавиша отключена в настройках")
             return
         try:
-            from modules.hotkeys import HotkeyManager
+            from modules.hotkeys import GlobalHotkeyManager
         except Exception:
             self._log("⌨ Модуль горячих клавиш недоступен")
             return
-        self._hotkey = HotkeyManager()
+        self._hotkey = GlobalHotkeyManager()
         started = self._hotkey.start(self._on_global_hotkey)
-        if started:
-            self._log("⌨ Горячая клавиша Ctrl+Alt+Space активна")
+        interface_started = started and self._hotkey.register(
+            "alt+x", self._on_interface_hotkey
+        )
+        if started and interface_started:
+            self._log("⌨ Ctrl+Alt+Space: окно, Alt+X: вызов ассистента")
         else:
-            self._log("⌨ Горячая клавиша недоступна (комбинация занята или нет pywin32)")
+            self._hotkey.stop()
+            self._hotkey = None
+            self._log("⌨ Глобальные клавиши недоступны или заняты")
 
     def _on_global_hotkey(self):
-        """Нажатие Ctrl+Alt+Space — принудительный вызов ассистента.
+        """Нажатие Ctrl+Alt+Space — только toggle видимости окна."""
+        self._post_ui(self.handle_hotkey_trigger)
 
-        Выполнение force_activate() выносится в фоновый daemon-поток
-        (_run_bg), т.к. внутри есть аудио-переключения и голосовой вызов —
-        синхронное выполнение из колбэка хоткея могло бы блокировать
-        поток Flet и спровоцировать плашку «Working…».
-        """
-        self._log("⌨ Горячая клавиша: вызов ассистента")
+    def _on_interface_hotkey(self):
+        """Нажатие Alt+X — показать интерфейс и активировать ассистента."""
+        self._post_ui(self._show_window)
+        self._log("⌨ Alt+X: вызов интерфейса и голосового ввода")
         self._run_bg(self.controller.force_activate)
 
+    def _show_window(self) -> None:
+        """Показывает окно поверх остальных окон и переводит его в фокус."""
+        try:
+            window = self.page.window
+            # Защита перехвата крестика (ТЗ: «X» должен отрабатывать на
+            # скрытие в трей после «Открыть»): Flet-клиент может сбросить
+            # prevent_close/on_window_event за время цикла «скрыть в трей ->
+            # показать» — восстанавливаем состояние ДО показа окна.
+            # Примечание: при prevent_close=True нативный пункт «Закрыть»
+            # в системном меню (Alt+Space) серый — это штатное поведение
+            # клиента Flet (SC_CLOSE деактивируется), сам крестик при этом
+            # перехватывается и приходит в _on_window_event.
+            window.prevent_close = True
+            self._attach_window_event_handler()
+            window.visible = True
+            window.minimized = False
+            bring_to_front = getattr(window, "bring_to_front", None)
+            if bring_to_front is None:
+                bring_to_front = getattr(window, "to_front", None)
+            if bring_to_front is not None:
+                self.page.run_task(bring_to_front)
+            window.focused = True
+            self.page.update()
+        except RuntimeError:
+            pass
+
+    def handle_hotkey_trigger(self) -> None:
+        """Переключает видимость окна по глобальной горячей клавише."""
+        try:
+            window = self.page.window
+            if window.visible:
+                window.visible = False
+            else:
+                window.visible = True
+                window.minimized = False
+                bring_to_front = getattr(window, "bring_to_front", None)
+                if bring_to_front is None:
+                    bring_to_front = getattr(window, "to_front", None)
+                if bring_to_front is not None:
+                    self.page.run_task(bring_to_front)
+                window.focused = True
+            self.page.update()
+        except RuntimeError:
+            pass
+
+    def _apply_start_minimized(self) -> None:
+        """Скрывает окно после запуска, оставляя фоновые сервисы активными."""
+        app_settings = self.controller.settings.get("app_settings", {})
+        if not app_settings.get("start_minimized", False):
+            return
+        if self._tray is None:
+            self._log(
+                "Окно не скрыто: системный трей недоступен, интерфейс оставлен видимым"
+            )
+            return
+        try:
+            self.page.window.visible = False
+            self.page.update()
+            self._log("Окно запущено в свернутом виде")
+        except RuntimeError:
+            pass
+
     def _toggle_hotkey(self, e):
-        """Включает/выключает горячую клавишу из настроек (live)."""
+        """Включает/выключает горячую клавишу из настроек (live).
+
+        .. deprecated:: Тумблер «Глобальная клавиша вызова Ctrl+Alt+Space»
+            удалён из настроек; метод оставлен временно для совместимости
+            и более нигде не вызывается.
+        """
         value = bool(e.control.value)
         # Запись settings.json — в фоновом потоке (IO не в потоке Flet)
         self._run_bg(
-            self.controller.update_settings, "app_settings", "hotkey_enabled", value
+            self.controller.update_settings,
+            "app_settings",
+            "global_hotkey_enabled",
+            value,
         )
         if value:
             if self._hotkey is None:
@@ -453,9 +642,18 @@ class ZeusUI:
     # ------------------------------------------------------------------
     def _build_ui(self):
         page = self.page
+        saved_settings = self.controller.get_settings() if self.controller else {}
+        saved_app_settings = saved_settings.get("app_settings", {})
+        saved_theme = saved_app_settings.get(
+            "theme", saved_settings.get("theme", "dark")
+        )
+        global C
+        C = dict(PALETTES["light" if saved_theme == "light" else "dark"])
         # В нативной строке — только имя приложения; кнопки окна рисует Windows.
         page.title = "Zeus"
-        page.theme_mode = ft.ThemeMode.DARK
+        page.theme_mode = (
+            ft.ThemeMode.LIGHT if saved_theme == "light" else ft.ThemeMode.DARK
+        )
         page.bgcolor = C["bg"]
         # ТЗ v1.2 (п.5.3): начальный размер окна.
         # resizable=True и maximizable=True — чтобы кнопка Maximize
@@ -464,6 +662,7 @@ class ZeusUI:
         page.window.height = 720
         page.window.resizable = True
         page.window.maximizable = True
+        page.window.prevent_close = True
         page.padding = 0
 
         # Обработчик изменения размера окна — масштабирование визуализатора
@@ -616,9 +815,9 @@ class ZeusUI:
         )
 
     def _build_sidebar(self):
-        """Сайдбар 240px по ТЗ v1.2 (п.4.1).
+        """Сайдбар 240px по ТЗ v1.3 (п.4.1).
 
-        Сверху вниз: логотип + ZEUS v1.2, разделитель, навигационное меню
+        Сверху вниз: логотип + ZEUSv1.3, разделитель, навигационное меню
         (активный пункт = color_primary), Spacer, статус-бар,
         переключатель темы Sun/Moon.
         """
@@ -654,7 +853,7 @@ class ZeusUI:
                         ft.Text(
                             "ZEUS", size=22, weight=ft.FontWeight.BOLD, color=C["text"]
                         ),
-                        ft.Text("v1.2", size=12, color=C["text_low_emphasis"]),
+                        ft.Text("v1.3", size=12, color=C["text_low_emphasis"]),
                     ],
                     spacing=4,
                 ),
@@ -897,7 +1096,12 @@ class ZeusUI:
         )
         self.voice_switch = ft.Switch(
             label="Автоматическое прослушивание",
-            value=True,
+            value=bool(
+                self.controller.get_settings().get("app_settings", {}).get(
+                    "auto_listening",
+                    self.controller.get_settings().get("auto_listening", True),
+                )
+            ),
             active_color=C["electric"],
             on_change=self._toggle_auto_listen,
         )
@@ -1098,6 +1302,10 @@ class ZeusUI:
     def _toggle_theme(self):
         """Мгновенно переключает Design Tokens и перестраивает UI."""
         new_key = "light" if self.page.theme_mode == ft.ThemeMode.DARK else "dark"
+        if self.controller is not None:
+            self._run_bg(
+                self.controller.update_settings, "app_settings", "theme", new_key
+            )
         global C
         C = dict(PALETTES[new_key])
         self.page.theme_mode = (
@@ -1115,6 +1323,7 @@ class ZeusUI:
         ai = settings.get("ai_settings", {})
         voice = settings.get("voice_settings", {})
         app_s = settings.get("app_settings", {})
+        paths = settings.get("paths", {})
 
         # -- Состояние UI (виджеты, которые будем менять) --
         self._settings_widgets = {}
@@ -1272,13 +1481,49 @@ class ZeusUI:
         )
         self._settings_widgets["autostart_sw"] = autostart_sw
 
-        hotkey_sw = ft.Switch(
-            label="Горячая клавиша Ctrl+Alt+Space",
-            value=app_s.get("hotkey_enabled", True),
-            active_color=C["electric"],
-            on_change=self._toggle_hotkey,
+        workspace_path = ft.TextField(
+            label="Рабочий каталог",
+            value=paths.get("workspace", "./data"),
+            width=360,
+            text_size=13,
+            color=C["text"],
+            bgcolor=C["surface"],
+            border_color=C["border"],
+            on_change=lambda e: self._on_setting_change(
+                "paths", "workspace", e.control.value
+            ),
         )
-        self._settings_widgets["hotkey_sw"] = hotkey_sw
+        dictionary_path = ft.TextField(
+            label="Путь к словарю",
+            value=paths.get("dictionary", "./data/dictionary.json"),
+            width=360,
+            text_size=13,
+            color=C["text"],
+            bgcolor=C["surface"],
+            border_color=C["border"],
+            on_change=lambda e: self._on_setting_change(
+                "paths", "dictionary", e.control.value
+            ),
+        )
+        self._settings_widgets["workspace_path"] = workspace_path
+        self._settings_widgets["dictionary_path"] = dictionary_path
+
+        extra_paths = ft.ExpansionTile(
+            title=ft.Text("Показать дополнительные пути", size=13, color=C["text"]),
+            leading=ft.Icon(ft.Icons.FOLDER_OPEN_OUTLINED, color=C["electric"]),
+            controls=[
+                ft.Row([workspace_path], spacing=12),
+                ft.Row([dictionary_path], spacing=12),
+            ],
+            expanded=False,
+            maintain_state=True,
+            text_color=C["text"],
+            icon_color=C["electric"],
+            collapsed_text_color=C["text"],
+            collapsed_icon_color=C["text_dim"],
+            tile_padding=0,
+            controls_padding=ft.Padding(left=0, top=8, right=0, bottom=0),
+        )
 
         app_card = ft.Container(
             content=ft.Column([
@@ -1289,7 +1534,7 @@ class ZeusUI:
                 ft.Divider(height=1, color=C["border"]),
                 ft.Row([theme_dd], spacing=12),
                 ft.Row([autostart_sw], spacing=12),
-                ft.Row([hotkey_sw], spacing=12),
+                extra_paths,
             ], spacing=12),
             bgcolor=C["surface"],
             border_radius=16,
@@ -1392,7 +1637,7 @@ class ZeusUI:
     def _on_save_settings(self, e=None):
         """Сохраняет все настройки в JSON (запись — в фоновом потоке)."""
         def worker():
-            saved = config.save_settings(self.controller.get_settings())
+            saved = self.controller.settings_manager.save()
             try:
                 if saved:
                     self._show_save_notice("✅ Все настройки сохранены")
@@ -1620,6 +1865,9 @@ class ZeusUI:
         # Переключение slow/fast GIF голограммы при изменении состояния TTS
         if hasattr(ctrl, "audio"):
             ctrl.audio.on_speaking_changed = self.update_assistant_state
+        # Модели загружаются после подключения UI-колбэков, поэтому каждый
+        # этап Vosk/Piper виден в терминале активности.
+        ctrl.start_model_loader(on_progress=self._log)
 
 
     # ------------------------------------------------------------------
@@ -1639,6 +1887,11 @@ class ZeusUI:
 
     def _log(self, text: str):
         """Добавляет запись в лог голосового помощника (через zeus-ui)."""
+        try:
+            from core.logging_service import infer_level, log
+            log(text, infer_level(text))
+        except Exception:
+            pass
         self._post_ui(lambda: self._do_log(text))
 
     def _clear_log(self, e=None):
@@ -1888,12 +2141,20 @@ class ZeusUI:
 
     def _toggle_auto_listen(self, e=None):
         """Включает/выключает автоматическое прослушивание (в фоне)."""
-        if self.voice_switch and self.voice_switch.value:
+        enabled = bool(self.voice_switch and self.voice_switch.value)
+        # Сохраняем состояние тем же маршрутом, что и настройки страницы.
+        # Controller.update_settings применяет изменение к аудиодвижку без
+        # перезапуска приложения.
+        self._run_bg(
+            self.controller.update_settings,
+            "app_settings",
+            "auto_listening",
+            enabled,
+        )
+        if enabled:
             self._log("🎤 Автоматическое прослушивание включено")
-            self._run_bg(self.controller.start_voice)
         else:
             self._log("🎤 Автоматическое прослушивание выключено")
-            self._run_bg(self.controller.stop_voice)
 
     # ------------------------------------------------------------------
     # Вспомогательные методы

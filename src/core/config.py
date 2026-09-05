@@ -13,6 +13,8 @@ import json
 import os
 import sys
 import threading
+from copy import deepcopy
+from pathlib import Path
 
 # Единый лок на запись/чтение settings.json: файл может сохраняться
 # из нескольких фоновых потоков одновременно (слайдер, тумблеры,
@@ -91,6 +93,13 @@ SETTINGS_PATH = data_path("settings.json")
 
 # Значения по умолчанию (новая иерархическая структура)
 DEFAULT_SETTINGS = {
+    # Плоские ключи v1.3 оставлены основным публичным контрактом.
+    "theme": "dark",
+    "auto_listening": True,
+    "audio": {
+        "input_device_index": None,
+        "speech_rate": 1.0,
+    },
     "ai_settings": {
         "model": "llama3.1",
         "temperature": 0.7,
@@ -134,14 +143,23 @@ DEFAULT_SETTINGS = {
     },
     "app_settings": {
         "theme": "dark",
+        "auto_listening": True,
         "autostart": False,
+        "start_minimized": False,
         "data_path": "./data",
         # Глобальная горячая клавиша Ctrl+Alt+Space для вызова ассистента
         "hotkey_enabled": True,
+        "global_hotkey_enabled": True,
         # Отладочный вывод фонового распознавания Wake Word («Зевс»)
         "debug_wake": False,
         # Автоматическое сканирование новых игр/приложений (рабочий стол + Steam)
         "auto_scan": True,
+    },
+    "paths": {
+        "workspace": "./data",
+        "dictionary": "./data/dictionary.json",
+        "vosk_model_path": "models/vosk-model-small-ru-0.22",
+        "piper_model_path": "models/tts/voice.onnx",
     },
 }
 
@@ -199,13 +217,37 @@ THEMES = {
 
 def _migrate_old_settings(data: dict) -> dict:
     """Мигрирует старые плоские настройки в новую иерархическую структуру."""
-    migrated = dict(DEFAULT_SETTINGS)
+    migrated = deepcopy(DEFAULT_SETTINGS)
 
     # Если уже новая структура — используем как есть
-    if "ai_settings" in data or "voice_settings" in data or "app_settings" in data:
-        for section in ("ai_settings", "voice_settings", "app_settings"):
+    if any(section in data for section in (
+        "ai_settings", "voice_settings", "app_settings", "audio", "paths",
+        "theme", "auto_listening",
+    )):
+        for section in ("ai_settings", "voice_settings", "app_settings", "audio", "paths"):
             if section in data:
-                migrated[section].update(data[section])
+                if isinstance(data[section], dict):
+                    migrated[section].update(data[section])
+        if (
+            "global_hotkey_enabled" not in data.get("app_settings", {})
+            and "hotkey_enabled" in data.get("app_settings", {})
+        ):
+            migrated["app_settings"]["global_hotkey_enabled"] = data["app_settings"][
+                "hotkey_enabled"
+            ]
+        migrated["theme"] = data.get("theme", migrated["app_settings"].get("theme"))
+        migrated["auto_listening"] = data.get(
+            "auto_listening", migrated["app_settings"].get("auto_listening", True)
+        )
+        migrated["audio"].setdefault(
+            "input_device_index", migrated["voice_settings"].get("mic_index")
+        )
+        migrated["audio"].setdefault(
+            "speech_rate", float(migrated["voice_settings"].get("rate", 190)) / 190
+        )
+        migrated["paths"].setdefault(
+            "piper_model_path", migrated["voice_settings"].get("piper_model")
+        )
         return migrated
 
     # Миграция старых плоских ключей
@@ -219,21 +261,139 @@ def _migrate_old_settings(data: dict) -> dict:
     return migrated
 
 
+def _normalize_v13_settings(settings: dict) -> dict:
+    """Синхронизирует плоский контракт v1.3 со старыми секциями приложения."""
+    settings = deepcopy(settings)
+    app = settings.setdefault("app_settings", {})
+    voice = settings.setdefault("voice_settings", {})
+    audio = settings.setdefault("audio", {})
+    paths = settings.setdefault("paths", {})
+    app["theme"] = settings.get("theme", app.get("theme", "dark"))
+    app["auto_listening"] = settings.get(
+        "auto_listening", app.get("auto_listening", True)
+    )
+    settings["theme"] = app["theme"]
+    settings["auto_listening"] = app["auto_listening"]
+    audio["input_device_index"] = (
+        voice["mic_index"] if voice.get("mic_index") is not None
+        else audio.get("input_device_index")
+    )
+    audio["speech_rate"] = audio.get("speech_rate", 1.0)
+    paths["piper_model_path"] = paths.get(
+        "piper_model_path", voice.get("piper_model", "models/tts/voice.onnx")
+    )
+    return settings
+
+
+class SettingsManager:
+    """Потокобезопасный менеджер локальных настроек приложения.
+
+    Менеджер держит настройки в памяти, сохраняет каждое изменение атомарно
+    и создаёт файл с дефолтами, если его ещё нет. Доступ к данным наружу
+    возвращается копией, чтобы фоновые потоки не меняли состояние мимо API.
+    """
+
+    def __init__(self, path: str | os.PathLike[str] | None = None):
+        self.path = Path(path or SETTINGS_PATH)
+        self._lock = threading.RLock()
+        self._settings = self._read()
+        # Всегда сохраняем нормализованную схему: это создаёт отсутствующий
+        # файл, восстанавливает повреждённый JSON и фиксирует миграции старых
+        # настроек до первого обращения UI к ним.
+        self.save()
+
+    @staticmethod
+    def _merge(defaults: dict, data: dict) -> dict:
+        result = deepcopy(defaults)
+        for key, value in data.items():
+            if isinstance(value, dict) and isinstance(result.get(key), dict):
+                result[key].update(value)
+            else:
+                result[key] = value
+        return result
+
+    def _read(self) -> dict:
+        try:
+            with self.path.open("r", encoding="utf-8") as file:
+                data = json.load(file)
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, ValueError, TypeError):
+            data = {}
+        return _normalize_v13_settings(
+            self._merge(DEFAULT_SETTINGS, _migrate_old_settings(data))
+        )
+
+    def get_all(self) -> dict:
+        with self._lock:
+            return deepcopy(self._settings)
+
+    def get(self, section: str, key: str, default=None):
+        with self._lock:
+            return self._settings.get(section, {}).get(key, default)
+
+    def set(self, section: str, key: str, value) -> bool:
+        with self._lock:
+            target = self._settings.setdefault(section, {})
+            if not isinstance(target, dict):
+                return False
+            target[key] = value
+            if section == "app_settings" and key in ("theme", "auto_listening"):
+                self._settings[key] = value
+            elif section == "voice_settings" and key == "mic_index":
+                self._settings.setdefault("audio", {})["input_device_index"] = value
+            elif section == "voice_settings" and key == "piper_model":
+                self._settings.setdefault("paths", {})["piper_model_path"] = value
+            return self.save()
+
+    def update(self, section: str, values: dict) -> bool:
+        with self._lock:
+            target = self._settings.setdefault(section, {})
+            if not isinstance(target, dict):
+                return False
+            target.update(values)
+            self._settings = _normalize_v13_settings(self._settings)
+            return self.save()
+
+    def save(self) -> bool:
+        with self._lock:
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
+                with tmp_path.open("w", encoding="utf-8") as file:
+                    json.dump(self._settings, file, ensure_ascii=False, indent=4)
+                os.replace(tmp_path, self.path)
+                return True
+            except OSError:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                return False
+
+    def reset(self) -> bool:
+        with self._lock:
+            self._settings = deepcopy(DEFAULT_SETTINGS)
+            self._settings = _normalize_v13_settings(self._settings)
+            return self.save()
+
+
 def load_settings() -> dict:
     """Загружает настройки из settings.json, дополняя дефолтами.
 
     Автоматически мигрирует старый формат в новый.
     Возвращает плоский словарь с иерархическими ключами для обратной совместимости.
     """
-    settings = dict(DEFAULT_SETTINGS)
+    settings = deepcopy(DEFAULT_SETTINGS)
     try:
         if os.path.exists(SETTINGS_PATH):
             with open(SETTINGS_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
             # Миграция и обновление
             migrated = _migrate_old_settings(data)
-            for section in ("ai_settings", "voice_settings", "app_settings"):
+            for section in ("ai_settings", "voice_settings", "app_settings", "audio", "paths"):
                 settings[section].update(migrated[section])
+            settings = _normalize_v13_settings(settings)
     except Exception:
         pass
 

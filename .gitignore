@@ -1,12 +1,41 @@
-<<<<<<< HEAD
+# --- Python / сборка ---
 __pycache__/
 *.pyc
 venv/
 .env
-settings.json
-=======
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
+
+# --- Секреты ---
+.env
+credentials.json
+
+# --- Логи и временные файлы ---
+*.log
+*.log.*
+*.tmp
+build_log.txt
+build_err.txt
+exe_err.log
+exe_run.log
+pyi_log.txt
+test_out.txt
+data/logs/
+data/settings.json
+data/settings.json.bak
+
+# --- Артефакты сборки PyInstaller ---
+build/
+dist/
+release/
+*.spec.bak
+
+# --- IDE ---
+.vscode/
+.idea/
+
+# --- Кэш тестов ---
+.pytest_cache/
+
+# --- AL (Dynamics 365 Business Central) ---
 #launch.json folder
 .vscode/
 #Cache folder
@@ -28,4 +57,3 @@ rad.json
 *.flf
 #Test results file
 TestResults.xml
->>>>>>> 8aa8c7f1914b1c3681aaf044387f200ccd05e0f4

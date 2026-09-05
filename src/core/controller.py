@@ -99,8 +99,10 @@ class ZeusController:
         # Регистрируем команды в асинхронном диспетчере v1.2
         _register_default_commands()
 
-        # Загрузка настроек
-        self.settings = config.load_settings()
+        # Единый владелец настроек: создаёт settings.json при первом запуске
+        # и сериализует изменения из UI и фоновых потоков.
+        self.settings_manager = config.SettingsManager()
+        self.settings = self.settings_manager.get_all()
 
         # --- Callbacks для UI (объявлены в самом начале, до любых вызовов методов) ---
         # Важно: инициализируются здесь, чтобы избежать AttributeError при вызове _set_status
@@ -159,11 +161,6 @@ class ZeusController:
         )
         self.chat = ChatEngine()
 
-        # Прогрев TTS в фоне: модель Piper загружается при старте, а не
-        # во время первой активации («Да, сэр?») — переход в командный
-        # режим происходит без лагов и без загрузки CPU в момент пробуждения.
-        self.audio.prewarm_tts()
-
         # Регистрируем голосовое уведомление о системных ошибках (Crash Handler).
         # При любом непредвиденном исключении Зевс мягко сообщит: «Произошла
         # системная ошибка, сэр», а не аварийно закроет окно.
@@ -206,19 +203,26 @@ class ZeusController:
         self.state = "IDLE"  # IDLE, LISTENING, PROCESSING
 
         # Голосовое управление из настроек
-        if not self.settings["voice_settings"].get("enabled", True):
+        app_settings = self.settings.get("app_settings", {})
+        if (not self.settings["voice_settings"].get("enabled", True)
+            or not app_settings.get("auto_listening", True)):
             self.is_active = False
-
-        # Автоматический запуск голосового прослушивания при старте,
-        # если активирован голосовой ввод
-        if self.is_active:
-            self.start_voice()
 
         # --- Новое: контекстный диалог (память сессии) ---
         voice = self.settings.get("voice_settings", {})
         self.follow_up_enabled = bool(voice.get("follow_up_enabled", True))
         self.follow_up_timeout = int(voice.get("follow_up_timeout", 8))
         self._follow_up_timer: threading.Timer | None = None
+        # Отложенное открытие окна уточнений: флаг ставится при распознанной
+        # голосовой команде (_on_command_heard), а снимается ПОСЛЕ фактического
+        # исполнения — в _finish_voice_command() (из _command_loop для системных
+        # команд или из _on_chat_complete/_on_chat_error для ответов LLM).
+        # Раньше окно открывалось сразу, и follow-up-таймер тикал, пока команда
+        # ещё стояла в очереди/генерировалась.
+        self._pending_follow_up = False
+        # Страховочный таймер: если генерация LLM зависла, принудительно
+        # завершаем голосовую команду, чтобы FSM не остался в PROCESSING.
+        self._followup_watchdog: threading.Timer | None = None
 
         # --- Новое: звуковые эффекты и логирование ---
         sfx.set_enabled(bool(voice.get("sfx_enabled", True)))
@@ -265,7 +269,7 @@ class ZeusController:
         """
         if section in self.settings and key in self.settings[section]:
             self.settings[section][key] = value
-            saved = config.save_settings(self.settings)
+            saved = self.settings_manager.set(section, key, value)
 
             # Мгновенное применение критических параметров
             if section == "ai_settings":
@@ -293,14 +297,19 @@ class ZeusController:
                     self.follow_up_timeout = int(value or 8)
                 elif key == "logging_enabled":
                     self.logging_enabled = bool(value)
+            elif section == "app_settings" and key == "auto_listening":
+                if value and not self.is_active:
+                    self.set_active(True)
+                elif not value and self.is_active:
+                    self.set_active(False)
 
             return saved
         return False
 
     def reset_settings(self) -> bool:
         """Сбрасывает настройки до стандартных."""
-        self.settings = dict(config.DEFAULT_SETTINGS)
-        saved = config.save_settings(self.settings)
+        saved = self.settings_manager.reset()
+        self.settings = self.settings_manager.get_all()
         self._apply_settings()
         return saved
 
@@ -377,7 +386,16 @@ class ZeusController:
         import winreg
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
         app_name = "Zeus"
-        exe_path = sys.executable if getattr(sys, 'frozen', False) else None
+        if getattr(sys, 'frozen', False):
+            exe_path = sys.executable
+        else:
+            # Режим разработки: регистрируем интерпретатор + main.py.
+            # Раньше здесь подставлялся None и команда тихо ничего не делала,
+            # хотя возвращала True (UI показывал успех).
+            main_py = os.path.join(config.app_base_dir(), "main.py")
+            if not os.path.isfile(main_py):
+                return False
+            exe_path = f'"{sys.executable}" "{main_py}"'
 
         try:
             with winreg.OpenKey(
@@ -541,8 +559,20 @@ class ZeusController:
                 try:
                     if command_result is not None:
                         self._handle_system_command(command_result)
+                        # Системная команда исполнена — только теперь открываем
+                        # окно уточнений / возвращаемся в IDLE.
+                        self._finish_voice_command()
                     else:
                         self._send_to_llm(text)
+                        # Ответ LLM приходит асинхронно (on_complete/on_error);
+                        # follow-up откроется там. Страховка на случай, если
+                        # генерация зависнет:
+                        self._cancel_followup_watchdog()
+                        self._followup_watchdog = threading.Timer(
+                            self.follow_up_timeout + 90.0, self._finish_voice_command
+                        )
+                        self._followup_watchdog.daemon = True
+                        self._followup_watchdog.start()
                 except Exception:  # noqa: BLE001
                     # Ошибка доставки результата (UI/TTS/LLM) НЕ должна
                     # убивать поток-потребитель: иначе ассистент навсегда
@@ -582,6 +612,8 @@ class ZeusController:
         except Exception:  # noqa: BLE001
             pass
         # Сбрасываем состояние сразу (без ожидания таймеров)
+        self._pending_follow_up = False
+        self._cancel_followup_watchdog()
         self._cancel_follow_up_timer()
         self._cancel_idle_return_timer()
         self._cancel_session_retry()
@@ -681,13 +713,35 @@ class ZeusController:
         self._cancel_follow_up_timer()
         self._transition_state("PROCESSING")
         self.audio.speak("Выполняю.")
-        try:
-            self.execute_action_async(self.execute_command, text)
-        finally:
-            if self.follow_up_enabled and self.is_active:
-                self._enter_follow_up()
-            else:
-                self._reset_to_idle()
+        # Окно уточнений откроется ПОСЛЕ фактического исполнения команды —
+        # см. _finish_voice_command(): из _command_loop (системная команда)
+        # или из _on_chat_complete/_on_chat_error (ответ LLM).
+        self._pending_follow_up = True
+        self.execute_action_async(self.execute_command, text)
+
+    def _cancel_followup_watchdog(self):
+        """Отменяет страховочный таймер завершения голосовой команды."""
+        timer = getattr(self, "_followup_watchdog", None)
+        if timer is not None:
+            timer.cancel()
+            self._followup_watchdog = None
+
+    def _finish_voice_command(self):
+        """Завершает голосовую команду: окно уточнений или возврат в IDLE.
+
+        Вызывается ПОСЛЕ фактического исполнения команды: из _command_loop
+        (системная команда исполнена), из _on_chat_complete/_on_chat_error
+        (ответ LLM получен/ошибка) либо из страховочного watchdog, если
+        генерация зависла. Идемпотентна: повторный вызов — no-op.
+        """
+        if not getattr(self, "_pending_follow_up", False):
+            return
+        self._pending_follow_up = False
+        self._cancel_followup_watchdog()
+        if self.follow_up_enabled and self.is_active:
+            self._enter_follow_up()
+        else:
+            self._reset_to_idle()
 
     def _enter_follow_up(self):
         """Открывает «окно диалога»: микрофон остаётся в режиме команды.
@@ -880,6 +934,9 @@ class ZeusController:
         """Отправляет текст в Ollama для генерации ответа."""
         if self.chat.is_busy():
             self._set_status("Зевс уже думает...")
+            # Завершаем голосовую команду сразу: не держим FSM в PROCESSING,
+            # пока отвечает предыдущий (не наш) запрос.
+            self._finish_voice_command()
             return
 
         self._set_status("Зевс думает...")
@@ -907,6 +964,8 @@ class ZeusController:
         self.audio.speak(full_text)
         sfx.play_success()
         self._log_session("LLM_OK", full_text[:200], source="llm", action="chat")
+        # Ответ LLM получен и озвучен — только теперь окно уточнений / IDLE.
+        self._finish_voice_command()
 
     def _on_chat_error(self, error: str):
         """Обработчик ошибки LLM."""
@@ -916,6 +975,8 @@ class ZeusController:
         if self.on_chat_error:
             self.on_chat_error(error)
         self._log_session("LLM_ERR", error, source="llm", success=False)
+        # Ошибка генерации тоже завершает голосовую команду.
+        self._finish_voice_command()
 
     # ------------------------------------------------------------------
     # Мониторинг сканирования флешек
@@ -956,6 +1017,15 @@ class ZeusController:
     # ------------------------------------------------------------------
     # Управление голосом
     # ------------------------------------------------------------------
+    def start_model_loader(self, on_progress=None):
+        """Запускает загрузку Vosk/Piper и включает Wake Word после неё."""
+        def _complete(success: bool):
+            if self.is_active:
+                self.start_voice()
+            self._set_status("Модели готовы" if success else "Модели загружены частично")
+
+        self.audio.load_models_background(on_progress=on_progress, on_complete=_complete)
+
     def start_voice(self):
         """Запускает фоновое прослушивание (IDLE — только Wake Word «Зевс»)."""
         if not self.is_active:
@@ -969,6 +1039,8 @@ class ZeusController:
         потоке (daemon), чтобы переключатель в UI не подвешивал Flet.
         """
         self._cancel_follow_up_timer()
+        self._pending_follow_up = False
+        self._cancel_followup_watchdog()
         threading.Thread(
             target=self.audio.stop_listening,
             daemon=True,

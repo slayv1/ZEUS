@@ -43,6 +43,12 @@ _CACHE_MAX_ANSWER = 1200
 # Порог длины запроса — кэшируем только короткие (частые) команды.
 _CACHE_MAX_QUERY = 80
 
+# Блокировка доступа к кэшу (RLock: _remember() держит лок и внутри вызывает
+# _save_cache(), который тоже его захватывает). Генерация выполняется в
+# отдельных потоках — без лока параллельные _remember() одновременно
+# перезаписывали бы data/cache.json, теряя/перемешивая записи.
+_cache_lock = threading.RLock()
+
 # Встроенные «заученные» ответы на типовые вопросы (без обращения к модели).
 _CANNED_ANSWERS = {
     "привет": "Здравствуйте, сэр. Чем могу помочь?",
@@ -108,6 +114,10 @@ class ChatEngine:
 
         # Флаг занятости
         self._is_busy = False
+        # Лок для атомарной проверки-и-установки флага: параллельные ask()
+        # из разных потоков иначе оба проходят проверку и запускают
+        # генерацию одновременно.
+        self._busy_lock = threading.Lock()
 
         # --- Кэш ответов для частых команд ---
         # Накопленные «заученные» пары + встроенные (canned). Нормализованный
@@ -134,26 +144,31 @@ class ChatEngine:
 
     def _load_cache(self) -> None:
         """Загружает накопленный кэш ответов из data/cache.json (best-effort)."""
-        self._cache = {}
-        try:
-            if os.path.exists(_CACHE_PATH):
-                with open(_CACHE_PATH, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    self._cache = {str(k): str(v) for k, v in data.items()}
-        except Exception:  # noqa: BLE001 — кэш не должен ломать чат
+        with _cache_lock:
             self._cache = {}
+            try:
+                if os.path.exists(_CACHE_PATH):
+                    with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        self._cache = {str(k): str(v) for k, v in data.items()}
+            except Exception:  # noqa: BLE001 — кэш не должен ломать чат
+                self._cache = {}
 
     def _save_cache(self) -> None:
-        """Сохраняет накопленный кэш на диск (best-effort)."""
-        if not self._cache:
-            return
-        try:
-            os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
-            with open(_CACHE_PATH, "w", encoding="utf-8") as f:
-                json.dump(self._cache, f, ensure_ascii=False, indent=2)
-        except Exception:  # noqa: BLE001
-            pass
+        """Сохраняет накопленный кэш на диск (best-effort).
+
+        Вызывается только при удержанном _cache_lock (см. _remember).
+        """
+        with _cache_lock:
+            if not self._cache:
+                return
+            try:
+                os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
+                with open(_CACHE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(self._cache, f, ensure_ascii=False, indent=2)
+            except Exception:  # noqa: BLE001
+                pass
 
     def _remember(self, query: str, answer: str) -> None:
         """«Запоминает» короткий частый запрос для мгновенного ответа впредь.
@@ -172,12 +187,13 @@ class ChatEngine:
             return
         if key in _CANNED_ANSWERS:
             return  # встроенные ответы не трогаем
-        self._cache[key] = answer.strip()
-        # LRU-срез до максимального размера
-        if len(self._cache) > _CACHE_MAX_SIZE:
-            items = list(self._cache.items())
-            self._cache = dict(items[-_CACHE_MAX_SIZE:])
-        self._save_cache()
+        with _cache_lock:
+            self._cache[key] = answer.strip()
+            # LRU-срез до максимального размера
+            if len(self._cache) > _CACHE_MAX_SIZE:
+                items = list(self._cache.items())
+                self._cache = dict(items[-_CACHE_MAX_SIZE:])
+            self._save_cache()
 
     def get_cached_answer(self, text: str) -> str | None:
         """Возвращает закэшированный ответ для запроса или None."""
@@ -188,7 +204,8 @@ class ChatEngine:
             return None
         if key in _CANNED_ANSWERS:
             return _CANNED_ANSWERS[key]
-        return self._cache.get(key)
+        with _cache_lock:
+            return self._cache.get(key)
 
     # ------------------------------------------------------------------
     # Проверка Ollama
@@ -203,7 +220,8 @@ class ChatEngine:
 
     def is_busy(self) -> bool:
         """Проверяет, выполняется ли сейчас генерация."""
-        return self._is_busy
+        with self._busy_lock:
+            return self._is_busy
 
     # ------------------------------------------------------------------
     # Отправка сообщения
@@ -218,21 +236,22 @@ class ChatEngine:
         Работает в отдельном потоке через синхронный ollama.chat — без asyncio,
         чтобы избежать ошибки «Event loop is closed».
         """
-        if self._is_busy:
-            return
-
-        # --- Быстрый путь: ответ из кэша без обращения к Ollama ---
-        cached = self.get_cached_answer(text)
-        if cached is not None:
+        with self._busy_lock:
+            if self._is_busy:
+                return
+            # --- Быстрый путь: ответ из кэша без обращения к Ollama ---
+            cached = self.get_cached_answer(text)
+            # Занимаем флаг ДО запуска фонового потока: иначе параллельный
+            # ask() пройдёт проверку занятости одновременно с нами.
             self._is_busy = True
+
+        if cached is not None:
             self.conversation.append({"role": "user", "content": text})
             self.conversation.append({"role": "assistant", "content": cached})
             threading.Thread(
                 target=self._emit_cached, args=(cached,), daemon=True
             ).start()
             return
-
-        self._is_busy = True
 
         # Сохраняем сообщение пользователя в историю
         self.conversation.append({"role": "user", "content": text})
@@ -256,7 +275,8 @@ class ChatEngine:
             if self.on_complete:
                 self.on_complete(answer)
         finally:
-            self._is_busy = False
+            with self._busy_lock:
+                self._is_busy = False
 
     def _run_sync(self, text: str):
         """Синхронный запрос к Ollama в отдельном потоке (без asyncio).
@@ -298,7 +318,8 @@ class ChatEngine:
             error_msg = f"Ошибка подключения к Ollama: {e}"
             self._trigger_error(error_msg)
         finally:
-            self._is_busy = False
+            with self._busy_lock:
+                self._is_busy = False
 
     def _trigger_error(self, message: str):
         """Уведомляет UI об ошибке через on_error (если зарегистрирован)."""

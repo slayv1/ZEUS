@@ -98,11 +98,23 @@ def _handle(exc_type, exc_value, tb) -> None:
     _notify()
 
 
+def _handle_threading(args: "threading.ExceptHookArgs") -> None:
+    """Адаптер для threading.excepthook.
+
+    threading.excepthook получает ОДИН аргумент — объект threading.ExceptHookArgs
+    (с полями exc_type, exc_value, exc_traceback, thread), а не три аргумента,
+    как sys.excepthook. Прямое присваивание _handle приводило к TypeError
+    внутри самого перехватчика: оригинальное исключение фонового потока
+    терялось, а в crash-лог писалась ошибка самого хука.
+    """
+    _handle(args.exc_type, args.exc_value, args.exc_traceback)
+
+
 def install_crash_handler() -> None:
     """Устанавливает глобальные перехватчики исключений приложения."""
     sys.excepthook = _handle
     try:
-        threading.excepthook = _handle
+        threading.excepthook = _handle_threading
     except Exception:  # noqa: BLE001 — не во всех версиях Python есть атрибут
         pass
     print("[CrashHandler] Глобальный перехватчик исключений установлен")

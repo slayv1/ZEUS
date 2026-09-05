@@ -80,9 +80,38 @@ class CommandRouter:
         import asyncio
 
         loop = _get_shared_loop()
+        if loop is None or loop.is_closed():
+            # Event loop не поднялся (редкий сбой потока) — не падаем,
+            # а выполняем обработчик резервно в обычном daemon-потоке.
+            print(f"[Router] Event loop недоступен — выполняю '{command_name}' в потоке")
+            threading.Thread(
+                target=self._run_handler_sync,
+                args=(command_name, *args),
+                kwargs=kwargs,
+                daemon=True,
+                name="zeus-router-fallback",
+            ).start()
+            return
         asyncio.run_coroutine_threadsafe(
             self._dispatch_and_wait(command_name, *args, **kwargs), loop
         )
+
+    def _run_handler_sync(self, command_name: str, *args, **kwargs) -> None:
+        """Резервный путь без event loop: прямой вызов обработчика в потоке."""
+        import asyncio
+
+        if command_name not in self.routes:
+            print(f"[Router] Неизвестная команда: '{command_name}'")
+            return
+        handler = self.routes[command_name]
+        try:
+            if inspect.iscoroutinefunction(handler):
+                asyncio.run(handler(*args, **kwargs))
+            else:
+                handler(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[Router Error] Ошибка в команде '{command_name}': {exc}")
+            traceback.print_exc()
 
     async def _dispatch_and_wait(self, command_name: str, *args, **kwargs) -> None:
         """Внутренний вызов dispatch, дополненный task_done-семантикой."""
@@ -110,8 +139,12 @@ _shared_loop: asyncio.AbstractEventLoop | None = None
 _loop_lock = threading.Lock()
 
 
-def _get_shared_loop() -> asyncio.AbstractEventLoop:
-    """Лениво поднимает общий event loop в daemon-потоке для dispatch_sync."""
+def _get_shared_loop() -> "asyncio.AbstractEventLoop | None":
+    """Лениво поднимает общий event loop в daemon-потоке для dispatch_sync.
+
+    Возвращает None, если loop не удалось поднять за отведённое время —
+    вызывающий код (dispatch_sync) обязан обработать этот случай.
+    """
     import asyncio
 
     global _shared_loop
@@ -129,5 +162,7 @@ def _get_shared_loop() -> asyncio.AbstractEventLoop:
             threading.Thread(
                 target=_run_loop, daemon=True, name="zeus-router-loop"
             ).start()
-            ready.wait(timeout=5.0)
+            if not ready.wait(timeout=5.0):
+                print("[Router] Не удалось поднять event loop за 5 c")
+                return None
         return _shared_loop

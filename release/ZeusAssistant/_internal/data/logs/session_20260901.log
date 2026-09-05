@@ -1,6 +1,0 @@
-[14:09:50] WAKE(voice) OK: Ключевое слово «Зевс» распознано
-[14:09:56] COMMAND(voice) OK: да сэр запусти касс два
-[14:09:56] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
-[14:09:56] SYSTEM(system) OK action=launch_game: Запускаю Counter-Strike 2, сэр.
-[14:10:04] COMMAND(voice) OK: мало
-[14:10:04] FOLLOW_UP(system) OK: Открыто окно контекстного диалога
