@@ -43,6 +43,23 @@ def apply_microphone_gain(audio_chunk: bytes, gain_factor: float = 1.5) -> bytes
     
     return amplified.astype(np.int16).tobytes()
 
+
+def _log_audio_error(text: str) -> None:
+    """Пишет ошибку аудио в консоль И в zeus.log (best-effort).
+
+    Зевс — многопоточное приложение, а в noconsole-сборке (.exe) консоли
+    нет вовсе: след ошибки распознавания/микрофона/TTS должен попадать в
+    файл журнала (data/zeus.log), чтобы его можно было проследить.
+    Уровень определяется автоматически по маркерам текста («Ошибка …» ->
+    ERROR, «недоступен» -> WARNING).
+    """
+    try:
+        print(f"[AudioEngine] {text}")
+        from core.logging_service import log as _log_msg, infer_level as _inf
+        _log_msg(f"[AudioEngine] {text}", _inf(f"[AudioEngine] {text}"))
+    except Exception:  # noqa: BLE001
+        pass
+
 # ------------------------------------------------------------------
 # TTS в стиле «Джарвис»
 # ------------------------------------------------------------------
@@ -601,7 +618,7 @@ class AudioEngine:
                         res = _json.loads(recognizer.Result())
                         self._handle_listen_text((res.get("text") or "").strip())
         except Exception as e:
-            print(f"[AudioEngine] Ошибка цикла прослушивания (микрофон недоступен?): {e}")
+            _log_audio_error(f"Ошибка цикла прослушивания (микрофон недоступен?): {e}")
             self._listen_running = False
 
     # Триггеры тишины: немедленное прерывание любых задач/озвучки.
@@ -758,11 +775,11 @@ class AudioEngine:
                 except sr.UnknownValueError:
                     pass
                 except sr.RequestError as e:
-                    print(f"[AudioEngine] Ошибка сервиса распознавания: {e}")
+                    _log_audio_error(f"Ошибка сервиса распознавания: {e}")
                 except Exception as e:
-                    print(f"[AudioEngine] Ошибка распознавания: {e}")
+                    _log_audio_error(f"Ошибка распознавания: {e}")
             except Exception as e:
-                print(f"[AudioEngine] Ошибка прослушивания (фолбэк Google): {e}")
+                _log_audio_error(f"Ошибка прослушивания (фолбэк Google): {e}")
                 if self._listen_running:
                     import time
                     time.sleep(0.5)
@@ -906,7 +923,7 @@ class AudioEngine:
                 try:
                     self._dispatch_speak(text)
                 except Exception as e:  # noqa: BLE001
-                    print(f"[AudioEngine] Ошибка TTS: {e}")
+                    _log_audio_error(f"Ошибка TTS: {e}")
             finally:
                 self._set_speaking(False)
                 # После собственной речи ещё 2.0 c глушим эхо (ТЗ v1.2,
@@ -994,7 +1011,7 @@ class AudioEngine:
                 engine.say(sent)
             engine.runAndWait()
         except Exception as e:
-            print(f"[AudioEngine] Ошибка TTS: {e}")
+            _log_audio_error(f"Ошибка TTS: {e}")
 
     # ------------------------------------------------------------------
     # Однократное распознавание (для кнопки «Слушать»)
@@ -1103,7 +1120,7 @@ class AudioEngine:
         except sr.UnknownValueError:
             return None
         except Exception as e:
-            print(f"[AudioEngine] Ошибка listen_once: {e}")
+            _log_audio_error(f"Ошибка listen_once: {e}")
             return None
 
     # ------------------------------------------------------------------

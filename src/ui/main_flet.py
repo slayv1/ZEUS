@@ -413,13 +413,24 @@ class ZeusUI:
                 pass
 
     def _shutdown_background_services(self) -> None:
-        """Останавливает трей, watcher и анимацию."""
+        """Останавливает трей, watcher, хоткеи и анимацию (ТЗ §2.3).
+
+        Останавливаются ВСЕ фоновые службы: иконка трея, файловый
+        наблюдатель, глобальные горячие клавиши и цикл анимации.
+        Метод идемпотентен — повторный вызов безопасен.
+        """
         if self._tray is not None:
             self._tray.stop()
             self._tray = None
         if self._watcher_started:
             stop_watching()
             self._watcher_started = False
+        if self._hotkey is not None:
+            try:
+                self._hotkey.stop()
+            except Exception:  # noqa: BLE001
+                pass
+            self._hotkey = None
         self._holo_running = False
 
     def _on_file_event(self, event: dict):

@@ -67,6 +67,17 @@ def _write_crash_log(exc_type, exc_value, tb) -> None:
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
         print(f"[CrashHandler] Системная ошибка записана в {path}")
+        # Дублируем компактную запись в общий zeus.log: сбои потоков должны
+        # быть видны в едином журнале, а не только в отдельном crash_*.log.
+        try:
+            from core.logging_service import log as _log_msg
+            _log_msg(
+                f"[CrashHandler] {_normalize_exc_name(str(exc_type) or exc_type.__name__)}"
+                f" в потоке {thread_name}: {exc_value}",
+                __import__("logging").ERROR,
+            )
+        except Exception:  # noqa: BLE001 — логирование не критично
+            pass
         return path
     except Exception as e:  # noqa: BLE001 — не должны падать в самом перехватчике
         print(f"[CrashHandler] Не удалось записать лог ошибки: {e}")

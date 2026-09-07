@@ -462,6 +462,24 @@ def test_shutdown_background_services_stops_everything(monkeypatch):
     assert ui._holo_running is False  # цикл анимации остановлен
 
 
+def test_shutdown_background_services_stops_hotkeys(monkeypatch):
+    """ТЗ §2.3: глобальные горячие клавиши останавливаются при выходе."""
+    ui = make_ui()
+    hotkey_stops = []
+
+    class FakeHotkey:
+        def stop(self):
+            hotkey_stops.append(1)
+
+    ui._hotkey = FakeHotkey()
+    monkeypatch.setattr(mf, "stop_watching", lambda: None)
+
+    ui._shutdown_background_services()
+
+    assert hotkey_stops == [1], "горячие клавиши должны быть остановлены"
+    assert ui._hotkey is None
+
+
 def test_shutdown_background_services_is_idempotent(monkeypatch):
     ui = make_ui()
     ui._tray = FakeTray()
