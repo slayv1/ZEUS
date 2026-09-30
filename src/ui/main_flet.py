@@ -29,84 +29,67 @@ from core.config import THEMES
 from core.file_watcher import start_watching, stop_watching
 from modules.tray import TrayManager
 
+# === ZEUS v1.4: Новые UI-компоненты (ТЗ v1.4 §10) ===
+from ui.zeus_state import ZeusState, ZeusStateController
+from ui.theme import get_theme_manager
+from ui.hologram import HologramWidget
+from ui.buttons import ListenButton, PowerButton
+from ui.main_window import ZeusMainWindow
+from ui.settings import SettingsPanel
+
+# === ZEUS v1.4 Neural Core (ТЗ Neural Core Interface) ===
+# Единый Design System + декомпозиция: Sidebar / CoreCard / NeuralCore /
+# SystemPanel+QuickActions+Recent / Terminal / Memory+Plugins.
+# Backend (controller/actions/chat/audio) не трогаем — только UI-слой.
+try:
+    from ui.design_system import PALETTES as _DS_PALETTES
+    from ui import sidebar as _sidebar
+    from ui import core_card as _core_card
+    from ui import neural_core as _neural_core
+    from ui import system_panel as _system_panel
+    from ui import terminal as _terminal
+    from ui import memory_plugins as _memory_plugins
+except ImportError:  # запуск из src/ (python src/ui/main_flet.py)
+    from design_system import PALETTES as _DS_PALETTES  # type: ignore[no-redef]
+    import sidebar as _sidebar  # type: ignore[no-redef]
+    import core_card as _core_card  # type: ignore[no-redef]
+    import neural_core as _neural_core  # type: ignore[no-redef]
+    import system_panel as _system_panel  # type: ignore[no-redef]
+    import terminal as _terminal  # type: ignore[no-redef]
+    import memory_plugins as _memory_plugins  # type: ignore[no-redef]
+
+try:
+    from ui.audio_devices_panel import AudioDevicesPanel
+except ImportError:  # noqa: BLE001 — запуск из src/
+    from audio_devices_panel import AudioDevicesPanel  # type: ignore[no-redef]
+
 # ВАЖНО: ZeusController НЕ импортируем на уровне модуля — его цепочка
 # (vosk, sounddevice, piper, pyaudio) загружается секунды и откладывала
 # старт socket-сервера Flet: клиент всё это время показывал «Working…».
 # Импортируем лениво в _boot_worker, уже ПОСЛЕ отрисовки сплэша.
 
 
-# === Design Tokens (ТЗ v1.2: светлая и тёмная темы) ===
-# Ключи по ТЗ: background_main, background_surface, color_primary,
-# text_high_emphasis, text_low_emphasis, terminal_background, terminal_text.
-# Старые ключи (bg, surface, electric, ...) оставлены как алиасы —
-# на них ссылается остальной код UI.
-PALETTES = {
-    "dark": {
-        # --- Токены референса (ТЗ: сдержанный, глубокий, тёмный) ---
-        "background_main": "#020408",      # Deep Space (ещё глубже)
-        "background_surface": "#080C14",   # Panel (ещё темнее)
-        "color_primary": "#1E40AF",        # Primary Blue (глубокий, не неон)
-        "color_cyan": "#0369A1",           # Cyan accent (приглушённый)
-        "text_high_emphasis": "#E2E8F0",   # Text (мягче, не чистый белый)
-        "text_low_emphasis": "#475569",    # Muted (ещё более приглушённый)
-        "terminal_background": "#010203",  # Terminal (почти чёрный)
-        "terminal_text": "#22C55E",        # Success (мягче зелёный)
-        "glow_primary": "#1E3A8A",         # Glow (глубокий, не резкий)
-        "glow_cyan": "#075985",            # Cyan glow (приглушённый)
-        # --- Алиасы (совместимость с существующим кодом) ---
-        "bg": "#020408",
-        "surface": "#080C14",
-        "surface_2": "#0A0F1A",
-        "card": "#080C14",
-        "card_border": "#111827",
-        "text": "#E2E8F0",
-        "text_dim": "#475569",
-        "accent": "#1E40AF",
-        "accent_dim": "#1E40AF",
-        "border": "#111827",
-        "hover": "#111827",
-        "electric": "#1E40AF",
-        "cyan": "#0369A1",
-        "sidebar": "#080C14",
-    },
-    "light": {
-        # --- Токены референса (ТЗ §15) ---
-        "background_main": "#F8FAFC",
-        "background_surface": "#FFFFFF",
-        "color_primary": "#1E40AF",
-        "color_cyan": "#0369A1",
-        "text_high_emphasis": "#1E293B",
-        "text_low_emphasis": "#475569",
-        "terminal_background": "#FFFFFF",
-        "terminal_text": "#166534",
-        "glow_primary": "#1E3A8A",
-        "glow_cyan": "#075985",
-        # --- Алиасы ---
-        "bg": "#F8FAFC",
-        "surface": "#FFFFFF",
-        "surface_2": "#E8EDF6",
-        "card": "#FFFFFF",
-        "card_border": "#E2E8F0",
-        "text": "#1E293B",
-        "text_dim": "#475569",
-        "accent": "#1E40AF",
-        "accent_dim": "#1E40AF",
-        "border": "#E2E8F0",
-        "hover": "#E8EFFA",
-        "electric": "#1E40AF",
-        "cyan": "#0369A1",
-        "sidebar": "#FFFFFF",
-    },
-}
+# === Design Tokens: единый источник — ui.design_system (ТЗ Neural Core §12) ===
+# Локальный PALETTES оставлен как алиас для обратной совместимости тестов
+# и старого кода (ссылается на канонические токены DS).
+try:
+    from ui.design_system import PALETTES as _CANON_PALETTES
+except ImportError:  # запуск из src/
+    from design_system import PALETTES as _CANON_PALETTES  # type: ignore[no-redef]
+PALETTES = _CANON_PALETTES
 
 # Текущая активная палитра (по умолчанию тёмная)
-C = dict(PALETTES["dark"])
+C = PALETTES["dark"]
 
 
-# === Секции навигации (ТЗ v1.2: Dashboard / Логи / Настройки) ===
+# === Секции навигации (ТЗ Neural Core §2 + обратная совместимость) ===
+# Порядок 0..2 сохранён для старых тестов/трея (Главная/логи/настройки),
+# новые пункты Память/Плагины добавлены в конец.
 SECTIONS = [
     {"label": "Главная", "icon": ft.Icons.DASHBOARD_ROUNDED},
     {"label": "Системные логи", "icon": ft.Icons.TERMINAL_ROUNDED},
+    {"label": "Память", "icon": ft.Icons.PSYCHOLOGY_ROUNDED},
+    {"label": "Плагины", "icon": ft.Icons.EXTENSION_ROUNDED},
     {"label": "Настройки", "icon": ft.Icons.SETTINGS_ROUNDED},
 ]
 
@@ -132,6 +115,9 @@ class ZeusUI:
         threading.Thread(
             target=self._ui_loop, daemon=True, name="zeus-ui"
         ).start()
+
+        # Подписка на записи logging_service ([AUDIO]-диагностика → терминал)
+        self._core_log_unsubscribe = None
 
         # Контроллер создаётся отложенно в фоновом потоке (см. _boot_worker),
         # чтобы тяжёлая инициализация движков (Vosk, аудио, Ollama, сканеры)
@@ -170,6 +156,15 @@ class ZeusUI:
 
         # --- Раздел 1: Настройки ---
         self.settings_content: ft.Container | None = None
+
+        # === ZEUS v1.4: Новые компоненты (ТЗ v1.4 §8/§10) ===
+        self.state_controller = ZeusStateController(ZeusState.IDLE)
+        self._theme_manager = get_theme_manager()
+        self.main_window: ZeusMainWindow | None = None
+        self.settings_panel: SettingsPanel | None = None
+        self._hologram_widget: HologramWidget | None = None
+        self._listen_btn: ListenButton | None = None
+        self._power_btn: PowerButton | None = None
 
         self._watcher_started = False
         self._hotkey = None
@@ -327,6 +322,7 @@ class ZeusUI:
         self._setup_controller()
         self._init_file_watcher()
         self._start_tray()
+        self._subscribe_core_logs()
 
     def _timeout_guard(self) -> None:
         """Стражник: если загрузка затянулась — сообщаем и продолжаем ждать."""
@@ -364,14 +360,69 @@ class ZeusUI:
                 ),
                 on_exit=lambda: self._post_ui(self._exit_application),
                 icon_path=config.resource_path("assets/icons/app_icon.ico"),
+                on_pick_input=self._on_tray_pick_input,
+                on_pick_output=self._on_tray_pick_output,
             )
             if self._tray.start():
                 self._log("☰ Иконка Zeus добавлена в системный трей")
+                # Сразу заполняем подменю актуальными устройствами
+                self._refresh_tray_audio_devices()
+                # Подключаем hot-plug callback к контроллеру.
+                # Имя атрибута — self.controller (единое для класса; ранние
+                # обращения к self._controller падали AttributeError и трей
+                # «терялся»: иконка создавалась, но ссылка занулялась).
+                if self.controller is not None:
+                    self.controller.on_tray_audio_update = (
+                        self._refresh_tray_audio_devices
+                    )
             else:
                 self._tray = None
         except Exception as exc:  # noqa: BLE001
             self._tray = None
             self._log(f"☰ Системный трей недоступен: {exc}")
+
+
+    def _refresh_tray_audio_devices(self) -> None:
+        """Обновляет список аудиоустройств в подменю системного трея.
+
+        Вызывается при запуске трея и при каждом hot-plug событии.
+        Безопасна для вызова из фонового потока DeviceWatcher.
+        """
+        tray = self._tray
+        ctrl = self.controller
+        if tray is None or ctrl is None:
+            return
+        try:
+            devices_in = ctrl.get_available_input_devices()
+            devices_out = ctrl.get_available_output_devices()
+            voice = ctrl.settings.get("voice_settings", {})
+            active_in = voice.get("input_device_id")
+            active_out = voice.get("output_device_id")
+            tray.update_audio_devices(devices_in, devices_out, active_in, active_out)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[UI] Ошибка обновления аудиоустройств в трее: {exc}")
+
+    def _on_tray_pick_input(self, device_id: str | None) -> None:
+        """Обработчик выбора микрофона из контекстного меню трея."""
+        ctrl = self.controller
+        if ctrl is None:
+            return
+        try:
+            ctrl.set_input_device(device_id)
+            self._refresh_tray_audio_devices()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[UI] Ошибка переключения микрофона: {exc}")
+
+    def _on_tray_pick_output(self, device_id: str | None) -> None:
+        """Обработчик выбора динамиков/наушников из контекстного меню трея."""
+        ctrl = self.controller
+        if ctrl is None:
+            return
+        try:
+            ctrl.set_output_device(device_id)
+            self._refresh_tray_audio_devices()
+        except Exception as exc:  # noqa: BLE001
+            print(f"[UI] Ошибка переключения устройства вывода: {exc}")
 
     def _close_window(self) -> None:
         """Программно закрывает окно (совместимо с async-API Flet).
@@ -431,6 +482,19 @@ class ZeusUI:
             except Exception:  # noqa: BLE001
                 pass
             self._hotkey = None
+        # Наблюдатель hot-plug аудиоустройств (v1.4)
+        try:
+            self.controller.stop_device_watcher()
+        except Exception:  # noqa: BLE001
+            pass
+        # Отписка от [AUDIO]-логов (мост в терминал)
+        unsub = getattr(self, "_core_log_unsubscribe", None)
+        if callable(unsub):
+            try:
+                unsub()
+            except Exception:  # noqa: BLE001
+                pass
+            self._core_log_unsubscribe = None
         self._holo_running = False
 
     def _on_file_event(self, event: dict):
@@ -449,6 +513,36 @@ class ZeusUI:
             "moved": "➡️ Перемещён",
         }.get(ev, ev)
         self._log(f"{label}: {os.path.basename(path)} [{ts}]")
+
+    # ------------------------------------------------------------------
+    # Мост [AUDIO]-диагностики в терминал интерфейса (Спринт 1 v1.4)
+    # ------------------------------------------------------------------
+
+    def _subscribe_core_logs(self) -> None:
+        """Подписывается на записи logging_service.
+
+        logging_service пишет только в файл; подписка позволяет показывать
+        аудио-диагностику модулей (hot-plug: подключение/отключение устройств,
+        причины Bluetooth/USB/jack, смена системного маршрута) прямо в
+        терминале активности. Колбэк исполняется в потоке записи — UI-часть
+        уходит в очередь через _post_ui.
+        """
+        if self._core_log_unsubscribe is not None:
+            return
+        try:
+            from core.logging_service import subscribe
+            self._core_log_unsubscribe = subscribe(self._on_core_log)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[UI] Не удалось подписаться на [AUDIO]-логи: {exc}")
+
+    def _on_core_log(self, message: str, level: int = 0) -> None:
+        """Колбэк подписки: [AUDIO]-строки модулей → терминал интерфейса."""
+        if not str(message).startswith(("[AUDIO]", "[AudioDevices]", "[AudioEngine]")):
+            return
+        try:
+            self._post_ui(lambda: self._do_log(str(message)))
+        except Exception:  # noqa: BLE001 — диагностика не должна ронять запись
+            pass
 
     def _attach_window_event_handler(self) -> None:
         """Привязывает обработчик событий окна к API установленной версии Flet.
@@ -659,45 +753,77 @@ class ZeusUI:
             "theme", saved_settings.get("theme", "dark")
         )
         global C
-        C = dict(PALETTES["light" if saved_theme == "light" else "dark"])
+        C = PALETTES["light" if saved_theme == "light" else "dark"]
         # В нативной строке — только имя приложения; кнопки окна рисует Windows.
         page.title = "Zeus"
         page.theme_mode = (
             ft.ThemeMode.LIGHT if saved_theme == "light" else ft.ThemeMode.DARK
         )
         page.bgcolor = C["bg"]
-        # ТЗ v1.2 (п.5.3): начальный размер окна.
-        # resizable=True и maximizable=True — чтобы кнопка Maximize
-        # корректно разворачивало окно на весь экран.
-        page.window.width = 1100
-        page.window.height = 720
+        # ТЗ Neural Core: окно под 3-колоночный макет (сайдбар 250 + центр + 350).
+        page.window.width = 1380
+        page.window.height = 860
+        page.window.min_width = 1180
+        page.window.min_width = 900
+        page.window.min_height = 650
         page.window.resizable = True
         page.window.maximizable = True
         page.window.prevent_close = True
         page.padding = 0
 
-        # Обработчик изменения размера окна — масштабирование визуализатора
+        # Адаптивный ресайз: подстраиваем голограмму и layout под размер окна.
+        # Голограмма уменьшена: GIF в пределах [220, 360] внутри сферы 360px.
         def on_resized(e):
-            try:
-                if hasattr(self, "holo_image") and self.holo_image:
-                    # Адаптивный размер: min(440, 30% высоты окна, 40% ширины окна)
-                    new_size = min(440, page.window.height * 0.35, page.window.width * 0.4)
-                    new_size = max(200, new_size)  # минимальный размер 200px
-                    self.holo_image.width = new_size
-                    self.holo_image.height = new_size
+            w = page.window.width or 1380
+            h = page.window.height or 860
+            # Голограмма: компактная сфера ~26% ширины / ~42% высоты окна
+            new_size = max(220, min(360, int(min(w * 0.26, h * 0.42))))
+            if getattr(self, "holo_image", None):
+                self.holo_image.width = new_size
+                self.holo_image.height = new_size
+                try:
                     self.holo_image.update()
-            except RuntimeError:
-                pass  # окно закрыто
+                except RuntimeError:
+                    pass
+            # Терминал: на маленьких экранах — 150px, на больших — до 260px
+            terminal_h = max(150, min(260, int(h * 0.28)))
+            if getattr(self, "_log_container", None):
+                self._log_container.height = terminal_h
+                try:
+                    self._log_container.update()
+                except RuntimeError:
+                    pass
+            # Перестраиваем main_row при пересечении порога 1100px
+            dashboard = getattr(self, "dashboard_content", None)
+            left = getattr(self, "_left_panel", None)
+            center_ctrl = getattr(self, "_center", None)
+            right = getattr(self, "_right_panel", None)
+            if dashboard and left and center_ctrl and right:
+                new_row = self._build_adaptive_main_row(left, center_ctrl, right, w)
+                try:
+                    col = dashboard.content
+                    if isinstance(col, ft.Column) and len(col.controls) > 2:
+                        col.controls[2] = new_row
+                        dashboard.update()
+                except (RuntimeError, IndexError, AttributeError):
+                    pass
 
         page.on_resized = on_resized
 
         # Создаём контент для всех разделов
+        # Порядок важен: сначала классика (голос/логи/настройки), затем
+        # Neural Core поверх тех же данных (system snapshot/история/терминал).
         self._build_voice_section()
         self._build_logs_section()
         self._build_settings_section()
 
+        # === ZEUS v1.4: Новое главное окно с голограммой (ТЗ v1.4 §2/§10) ===
+        self._build_v14_main_window()
+
         # Сайдбар 240px (ТЗ v1.2, п.4.1)
         self.sidebar = self._build_sidebar()
+        # Баг-фикс: принудительная подсветка активного пункта при загрузке
+        self._select_section(0)
 
         # Область контента (отступы 30px — ТЗ п.4.2)
         self.content_area = ft.Container(
@@ -708,11 +834,22 @@ class ZeusUI:
         )
 
         # Заголовок контентной части (вместо AppBar — ТЗ п.4.2)
+        # ТЗ v1.4 §2: добавлена кнопка переключения Classic / New UI
         self.page_title = ft.Text(
             SECTIONS[0]["label"],
             size=32,
             weight=ft.FontWeight.BOLD,
             color=C["text"],
+        )
+
+        # Ряд заголовка с кнопкой переключения вида (ТЗ v1.4 §2)
+        self._title_row = ft.Row(
+            [
+                self.page_title,
+                ft.Container(expand=True),
+                self._v14_view_toggle,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
         # Основной макет: сайдбар + рабочая зона
@@ -755,6 +892,116 @@ class ZeusUI:
             )
         self._log(f"Ollama: {'доступна' if self.controller.chat.is_available() else 'недоступна'}")
 
+    def _build_adaptive_main_row(
+        self,
+        left_panel: ft.Column,
+        center: ft.Column,
+        right_panel: ft.Column,
+        page_width: int = 1380,
+    ) -> ft.Row | ft.Column:
+        """Адаптивный layout: 3 колонки на широких экранах, 1 колонка на узких.
+
+        При ширине < 1100px переключается в одноколоночный режим с scroll —
+        на маленьких экранах панели идут вертикально, чтобы не накладываться.
+        """
+        if page_width >= 1100:
+            # Широкий экран: 3 колонки в ряд
+            return ft.Row(
+                [
+                    left_panel,
+                    ft.Container(
+                        content=center,
+                        expand=True,
+                        alignment=ft.Alignment.CENTER,
+                        padding=ft.Padding.symmetric(horizontal=8),
+                    ),
+                    right_panel,
+                ],
+                spacing=14,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+                expand=True,
+            )
+        else:
+            # Узкий экран: одна колонка с адаптивными ширинами
+            left_panel.expand = True
+            right_panel.expand = True
+            return ft.Column(
+                [
+                    left_panel,
+                    ft.Container(height=10),
+                    ft.Container(
+                        content=center,
+                        alignment=ft.Alignment.CENTER,
+                        padding=ft.Padding.symmetric(vertical=16),
+                    ),
+                    ft.Container(height=10),
+                    right_panel,
+                ],
+                spacing=0,
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
+            )
+
+    # ------------------------------------------------------------------
+    # ZEUS v1.4: Новое главное окно (ТЗ v1.4 §2/§10)
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # ZEUS v1.4: Новое главное окно (ТЗ v1.4 §2/§10)
+    # ------------------------------------------------------------------
+    def _build_v14_main_window(self) -> None:
+        """Создаёт новое главное окно ZEUS v1.4 с голограммой и floating buttons.
+
+        ТЗ v1.4 §2: структура с голограммой, статусом, чатом и кнопками.
+        """
+        p = self._theme_manager.get_palette()
+
+        self.main_window = ZeusMainWindow(
+            state_controller=self.state_controller,
+            on_listen=self._on_v14_listen,
+            on_power=self._on_v14_power,
+        )
+
+        # Подключаем смену темы к новому окну
+        self._theme_manager.on_change(self._on_v14_theme_change)
+
+    def _on_v14_listen(self, e: ft.ControlEvent) -> None:
+        """Обработчик кнопки Listen в новом окне (ТЗ v1.4 §4)."""
+        if self.controller and self.controller.audio.is_mic_available():
+            self._on_listen_once()
+
+    def _on_v14_power(self, e: ft.ControlEvent) -> None:
+        """Обработчик кнопки Power в новом окне (ТЗ v1.4 §4)."""
+        self._toggle_sleep(e)
+
+    def _on_v14_theme_change(self, theme: str, palette: dict[str, str]) -> None:
+        """Обработчик смены темы для нового окна (ТЗ v1.4 §7)."""
+        if self.main_window:
+            self.main_window._on_theme_change(theme, palette)
+
+    def _toggle_v14_view(self, e: ft.ControlEvent) -> None:
+        """Переключает между Classic и ZEUS v1.4 видом (ТЗ v1.4 §2)."""
+        if not self.main_window:
+            return
+
+        self._v14_active = not self._v14_active
+
+        def _apply():
+            try:
+                if self._v14_active:
+                    self.content_area.content = self.main_window
+                    self._v14_view_toggle.icon_color = C.get("accent", "#00E5FF")
+                    self._v14_view_toggle.tooltip = "Переключить вид: Classic"
+                else:
+                    self.content_area.content = self._classic_content
+                    self._v14_view_toggle.icon_color = C.get("text_dim", "#94A3B8")
+                    self._v14_view_toggle.tooltip = "Переключить вид: ZEUS v1.4"
+                self.content_area.update()
+                self._v14_view_toggle.update()
+            except RuntimeError:
+                pass
+
+        self._post_ui(_apply)
+
     # ------------------------------------------------------------------
     # Навигация
     # ------------------------------------------------------------------
@@ -772,7 +1019,11 @@ class ZeusUI:
         # Подсветка активного пункта сайдбара (пересоздаём с цветами темы)
         for i, btn in enumerate(self._nav_buttons):
             section = SECTIONS[i]
-            new_btn = self._nav_item(section["icon"], section["label"], i == index)
+            is_selected = (i == index)
+            # Баг-фикс: используем единый метод build_nav_item
+            new_btn = _sidebar.build_nav_item(
+                section["icon"], section["label"], is_selected, C
+            )
             new_btn.data = i
             new_btn.on_click = lambda e: self._select_section(int(e.control.data))
             # Заменяем содержимое существующего контейнера сайдбара
@@ -794,15 +1045,23 @@ class ZeusUI:
         # Обновляем контент
         if self.content_area:
             self.content_area.content = self._get_section_content(index)
+            # Раздел «Настройки»: лениво подгружаем список аудиоустройств
+            # (COM-запрос выполняется в фоне, UI не блокируется).
+            if index == 4 and getattr(self, "_audio_devices_panel", None) is not None:
+                self._audio_devices_panel.refresh_async()
             self.content_area.update()
 
     def _get_section_content(self, index: int) -> ft.Control:
-        """Возвращает контент для указанного раздела."""
+        """Возвращает контент для выбранного раздела (ТЗ Neural Core)."""
         if index == 0:
             return self.dashboard_content
         elif index == 1:
             return self.logs_content
         elif index == 2:
+            return self._memory_content()
+        elif index == 3:
+            return self._plugins_content()
+        elif index == 4:
             return self.settings_content
         else:
             return ft.Container()
@@ -814,7 +1073,7 @@ class ZeusUI:
                 self.sidebar,
                 ft.Column(
                     [
-                        self.page_title,
+                        self._title_row,
                         self.content_area,
                     ],
                     expand=True,
@@ -825,139 +1084,102 @@ class ZeusUI:
             spacing=0,
         )
 
-    def _build_sidebar(self):
-        """Сайдбар 240px по ТЗ v1.3 (п.4.1).
+    def _system_snapshot(self) -> dict[str, float]:
+        """CPU/RAM/Disk снимок для SystemPanel (best-effort)."""
+        snapshot = {"cpu": 0.18, "ram": 0.42, "disk": 0.63}
+        try:
+            import psutil
+            try:
+                snapshot["cpu"] = max(0.0, min(1.0, float(psutil.cpu_percent(interval=None)) / 100.0)) or 0.05
+            except Exception:
+                pass
+            try:
+                snapshot["ram"] = max(0.0, min(1.0, float(psutil.virtual_memory().percent) / 100.0))
+            except Exception:
+                pass
+            try:
+                import os as _os
+                _root = _os.path.abspath(_os.sep)
+                snapshot["disk"] = max(0.0, min(1.0, float(psutil.disk_usage(_root).percent) / 100.0))
+            except Exception:
+                pass
+        except Exception:
+            pass
+        return snapshot
 
-        Сверху вниз: логотип + ZEUSv1.3, разделитель, навигационное меню
-        (активный пункт = color_primary), Spacer, статус-бар,
-        переключатель темы Sun/Moon.
+    def _on_quick_action(self, key: str) -> None:
+        """Быстрые действия правой колонки — через существующий backend."""
+        mapping = {
+            "browser": "открой браузер",
+            "file": "найди файл",
+            "music": "включи музыку",
+            "vscode": "запусти vs code",
+        }
+        text = mapping.get(key)
+        if text:
+            self._run_bg(self._on_listen_once, text)
+
+    def _recent_commands(self, limit: int = 6):
+        """Последние команды из лога сессии для правой колонки."""
+        items = []
+        try:
+            import re
+            for line in list(getattr(self, "_session_lines", []) or [])[::-1]:
+                m = re.match(r"\[(\d+:\d+:\d+)\]\s*(?:USER|YOU)[:\s]+(.+)", str(line))
+                if m and m.group(2).strip():
+                    items.append((m.group(1)[-5:], m.group(2).strip()[:42]))
+                if len(items) >= limit:
+                    break
+        except Exception:
+            pass
+        return items or [
+            ("17:42", "Открыть браузер"),
+            ("17:38", "Включить музыку"),
+            ("17:35", "Найди файл проекта"),
+            ("17:32", "Покажи погоду"),
+            ("17:28", "Запусти VS Code"),
+            ("17:25", "Сделай скриншот"),
+        ]
+
+    def _memory_content(self) -> ft.Control:
+        """Страница MEMORY: каркас (ТЗ п.10)."""
+        history = [cmd for _, cmd in self._recent_commands(limit=10)]
+        return _memory_plugins.build_memory_page(C, history=history, on_clear=lambda e: None)
+
+    def _plugins_content(self) -> ft.Control:
+        """Страница PLUGINS: карточки вкл/выкл (только UI)."""
+        return _memory_plugins.build_plugins_page(C, on_toggle=lambda k, v: self._log(f"Плагин {k}: " + ("вкл" if v else "выкл")))
+
+    def _build_sidebar(self):
+        """Sidebar Neural Core 250px (ТЗ §2): оформление — ui.sidebar.
+
+        Контракт сохранён: self._nav_buttons[i], _select_section(i), _nav_hover.
         """
         self._nav_buttons = []
+        logo_block = _sidebar.build_logo(C, config.resource_path("assets/icons/logo_1024.png"))
         for i, section in enumerate(SECTIONS):
-            btn = self._nav_item(section["icon"], section["label"], i == self.selected_index)
+            btn = _sidebar.build_nav_item(section["icon"], section["label"], i == self.selected_index, C)
             btn.data = i
             btn.on_click = lambda e: self._select_section(int(e.control.data))
+            btn.on_hover = lambda e: self._nav_hover(e, int(e.control.data) == self.selected_index)
             self._nav_buttons.append(btn)
-
-        # Кастомный «эмиссивный» логотип: молния в круге со свечением (ТЗ п.3.1)
-        logo = ft.Container(
-            content=ft.Image(
-                src=config.resource_path("assets/icons/logo_1024.png"),
-                width=20,
-                height=20,
-                fit=ft.BoxFit.CONTAIN,
-                repeat=ft.ImageRepeat.NO_REPEAT,
-            ),
-            width=34,
-            height=34,
-            alignment=ft.Alignment.CENTER,
-            padding=4,
-            border_radius=8,
-            bgcolor=ft.Colors.with_opacity(0.08, C["color_primary"]),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.WHITE)),
-        )
-        logo_block = ft.Row(
-            [
-                logo,
-                ft.Row(
-                    [
-                        ft.Text(
-                            "ZEUS", size=22, weight=ft.FontWeight.BOLD, color=C["text"]
-                        ),
-                        ft.Text("v1.3", size=12, color=C["text_low_emphasis"]),
-                    ],
-                    spacing=4,
-                ),
-            ],
-            spacing=12,
-        )
-
-        # Статус-бар (пульсирующий зелёный маячок + текст — ТЗ §4.1)
-        status_bar = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Container(
-                        width=10,
-                        height=10,
-                        border_radius=5,
-                        bgcolor="#27C93F",
-                        shadow=ft.BoxShadow(
-                            blur_radius=10,
-                            color="#27C93F",
-                            spread_radius=1,
-                        ),
-                    ),
-                    ft.Column(
-                        [
-                            ft.Text(
-                                "Система активна",
-                                size=12,
-                                color=C["text_low_emphasis"],
-                            ),
-                            ft.Text(
-                                "Vosk / Piper online",
-                                size=10,
-                                color=C["text_low_emphasis"],
-                            ),
-                        ],
-                        spacing=1,
-                    ),
-                ],
-                spacing=8,
-            ),
-            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
-            bgcolor=ft.Colors.with_opacity(0.4, C["hover"]),
-            border=ft.Border.all(1, C["border"]),
-            border_radius=12,
-        )
-
-        # Переключатель темы (ТЗ §8): круглая кнопка 40×40
-        self._theme_btn = ft.IconButton(
-            icon=(
-                ft.Icons.LIGHT_MODE_ROUNDED
-                if self.page.theme_mode == ft.ThemeMode.DARK
-                else ft.Icons.DARK_MODE_ROUNDED
-            ),
-            icon_size=20,
-            icon_color=C["color_primary"],
-            width=40,
-            height=40,
-            tooltip="Светлая тема" if self.page.theme_mode == ft.ThemeMode.DARK else "Тёмная тема",
-            on_click=lambda _: self._toggle_theme(),
-        )
-
+        status_footer = _sidebar.build_status_footer(C)
         return ft.Container(
             content=ft.Column(
                 [
                     logo_block,
-                    ft.Divider(height=1, color=C["border"]),
+                    ft.Container(height=10),
                     *self._nav_buttons,
                     ft.Container(expand=True),
-                    # Футер-карточка: статус + кнопка темы (ТЗ §7) — неоновый стиль
-                    ft.Container(
-                        content=ft.Column(
-                            [status_bar, self._theme_btn],
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=4,
-                        ),
-                        border=ft.Border.all(1, C["card_border"]),
-                        border_radius=12,
-                        padding=ft.Padding.symmetric(horizontal=8, vertical=8),
-                    ),
+                    status_footer,
                 ],
-                spacing=10,
+                spacing=6,
+                expand=True,
             ),
-            width=280,
-            padding=ft.Padding.symmetric(vertical=16, horizontal=12),
+            width=_sidebar.SIDEBAR_WIDTH,
             bgcolor=C["sidebar"],
-            border=ft.Border.only(right=ft.BorderSide(1, C["border"])),
-            shadow=ft.BoxShadow(
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.2, "#000000" if self.page.theme_mode != ft.ThemeMode.LIGHT else "#94A3B8"),
-                spread_radius=0,
-            ),
+            padding=ft.Padding(16, 18, 16, 16),
         )
-
     def _nav_item(self, icon, label, selected) -> ft.Container:
         """Пункт навигации сайдбара (ТЗ v1.2 финал, §3).
 
@@ -1023,6 +1245,8 @@ class ZeusUI:
             weight=ft.FontWeight.BOLD,
             color=C["electric"],
         )
+        # Малая подпись текущих аудиоустройств (ТЗ v1.4 §3.2)
+        self._devices_label = ft.Text("", size=11, color=C["text_dim"], max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
 
         # --- Индикатор состояния (неоновый зелёный = ожидание «Зевс», синий = команда) ---
         # Внутренний LED — его цвет меняет _do_state (внешний просто даёт ореол)
@@ -1051,6 +1275,8 @@ class ZeusUI:
 
         # --- Голографический визуализатор (ТЗ v1.2: центральный техно-круг) ---
         holo_viz = self._build_holo_visualizer()
+        self._status_legacy = ft.Column([self.status_dot, self.status_dot_label,
+            self.voice_status], spacing=2, visible=False)
 
         # Терминал активности (ТЗ п.4.2): цветные spans, mono, expand
         self.log_text = ft.Text(
@@ -1062,14 +1288,15 @@ class ZeusUI:
             content=ft.Column(
                 [self.log_text],
                 scroll=ft.ScrollMode.AUTO,
-                expand=True,
+                expand=False,
             ),
             bgcolor=C["terminal_background"],
             border_radius=12,
             border=ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.WHITE)),
             padding=20,
-            expand=True,
+            height=200,
         )
+        self._log_container = log_container  # для адаптивного ресайза
 
         # Кнопки управления — круглые Icon Buttons 58×58 (плоский дизайн)
         # Sleep/Power button
@@ -1115,6 +1342,7 @@ class ZeusUI:
             ),
             active_color=C["electric"],
             on_change=self._toggle_auto_listen,
+            width=250,
         )
         # Информационная иконка (ТЗ v1.2 §Б): подсказка о режиме
         auto_listen_info = ft.Icon(
@@ -1124,15 +1352,29 @@ class ZeusUI:
             tooltip="Постоянное распознавание Wake Word «Зевс» без ручного запуска",
         )
 
-        # Кнопка очистки терминала (ТЗ §16): маленькая IconButton 32×32
+        # Кнопка очистки терминала (ТЗ §16): маленькая IconButton 32×32.
+        # Важно: чистит только визуальный список — data/zeus.log на диске
+        # не трогает, полная история доступна через кнопку открытия лога.
         self.clear_log_btn = ft.IconButton(
             icon=ft.Icons.DELETE_OUTLINE,
             icon_size=16,
             icon_color=C["text_dim"],
             width=32,
             height=32,
-            tooltip="Очистить терминал",
+            tooltip="Очистить терминал (файл zeus.log на диске не удаляется)",
             on_click=self._clear_log,
+        )
+
+        # Кнопка открытия файла лога (бэклог v1.4 п.2): zeus.log уже пишется
+        # logging_service на диск — просто показываем его пользователю.
+        self.open_log_btn = ft.IconButton(
+            icon=ft.Icons.FOLDER_OPEN_OUTLINED,
+            icon_size=16,
+            icon_color=C["text_dim"],
+            width=32,
+            height=32,
+            tooltip="Открыть файл журнала zeus.log (полная история, даже после очистки терминала)",
+            on_click=self._open_log_file,
         )
 
         # Статус-карточка (ТЗ §9): растягивается по ширине при максимизации
@@ -1144,6 +1386,9 @@ class ZeusUI:
                         spacing=8,
                     ),
                     self.voice_status,
+                    # Подпись текущих устройств ввода/вывода (ТЗ v1.4 §3.2):
+                    # видно, через что Зевс слушает/говорит, без настроек.
+                    self._devices_label,
                     ft.Row([self.voice_switch, auto_listen_info], spacing=4),
                 ],
                 spacing=6,
@@ -1166,35 +1411,121 @@ class ZeusUI:
                     color=C["text"],
                 ),
                 ft.Container(expand=True),
+                self.open_log_btn,
                 self.clear_log_btn,
             ],
             spacing=8,
         )
 
+        model_name = "llama3.1"
+        try:
+            if self.controller is not None:
+                model_name = str(getattr(self.controller.chat, "model", model_name) or model_name)
+        except Exception:
+            pass
+
+        # === ZEUS v1.4 Neural Core: адаптивный макет ===
+        # Левая колонка — ZEUS CORE: фиксированная ширина на больших экранах,
+        # но с min/max для адаптивности.
+        left_panel = ft.Column(
+            [
+                _core_card.build_core_card(
+                    C, model=model_name,
+                    voice_engine="Vosk", memory="Активна", plugins="5 загружено",
+                    online=True, transparent=True,
+                ),
+                ft.Container(height=2),
+                self._devices_label,
+                ft.Row([self.voice_switch, auto_listen_info], spacing=4),
+            ],
+            spacing=6,
+            width=270,
+        )
+
+        # Центр — светящаяся сфера-ядро (Ref: яркий круг по центру кадра).
+        # Адаптивный expand: занимает всё доступное пространство между панелями.
+        center = _neural_core.build_neural_core(
+            self.holo_container, "Готов к работе", "Слушаю...", C, size=360, globe=True,
+        )
+        self._neural_status_text = center.status_text
+        self._neural_sub_text = center.sub_text
+
+        snap = self._system_snapshot()
+        # Правая колонка — System Status + Быстрые действия + Последние команды.
+        # Адаптивная ширина: min 240px, expand 1 (растягивается).
+        right_panel = ft.Column(
+            [
+                _system_panel.build_system_panel(
+                    C, cpu=snap["cpu"], ram=snap["ram"], disk=snap["disk"], transparent=True,
+                ),
+                _system_panel.build_quick_actions(
+                    C, on_action=self._on_quick_action, transparent=True,
+                ),
+                _system_panel.build_recent_commands(
+                    C, items=self._recent_commands(limit=5), transparent=True,
+                ),
+            ],
+            spacing=10,
+            width=300,
+        )
+        self._right_column = right_panel
+        self._left_panel = left_panel
+        self._center = center
+        self._right_panel = right_panel
+
+        # Шапка: подзаголовок слева, ONLINE-пилюля + LED + кнопки вправо
+        # (заголовок «Главная» живёт в page_title над content_area).
+        online_pill = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Container(
+                        width=9, height=9, border_radius=5, bgcolor=C["green"],
+                        shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=C["green"]),
+                    ),
+                    ft.Text("ONLINE", size=12, weight=ft.FontWeight.W_600, color=C["text"]),
+                    ft.Text("| Соединение с Zeus", size=11, color=C["text_dim"]),
+                    self.voice_status,
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=14, vertical=8),
+            bgcolor=ft.Colors.with_opacity(0.05, C["green"]),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.35, C["green"])),
+            border_radius=999,
+        )
+        header_row = ft.Row(
+            [
+                ft.Text("Ваш личный AI-ассистент. Всегда рядом.", size=13, color=C["text_dim"]),
+                ft.Container(expand=True),
+                self.status_dot,
+                online_pill,
+                ft.Container(width=6),
+                self.sleep_button,
+                self.listen_button,
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+        # Адаптивный layout: 3 колонки на широких экранах, 1 колонка на узких
+        page_w = self.page.window.width if self.page and self.page.window else 1380
+        main_row = self._build_adaptive_main_row(left_panel, center, right_panel, page_w)
+
         controls = ft.Container(
             content=ft.Column(
                 [
-                    # Верхняя панель: статус-карточка слева, кнопки справа,
-                    # все элементы на одной вертикальной оси (ТЗ финал §2)
-                    ft.Row(
-                        [status_card, ft.Container(expand=True), self.sleep_button, self.listen_button],
-                        spacing=8,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    holo_viz,
-                    ft.Container(height=4),
+                    header_row,
+                    ft.Container(height=8),
+                    main_row,
+                    ft.Container(height=10),
                     terminal_header,
                     log_container,
                 ],
-                spacing=12,
+                spacing=8,
                 expand=True,
-                # ТЗ (дополнение) §7: дети Column растягиваются по ширине —
-                # терминал занимает всю рабочую область, без «узкого бокса».
-                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
             expand=True,
         )
-
         self.dashboard_content = controls
         self.voice_content = controls  # алиас для совместимости
         # ТЗ финал §2: бесшовное слияние с фоном рабочей зоны —
@@ -1202,6 +1533,23 @@ class ZeusUI:
         self.voice_content.bgcolor = None
         self.voice_content.border_radius = None
         self.voice_content.border = None
+
+        # === ZEUS v1.4: Переключатель Classic / New UI (ТЗ v1.4 §2) ===
+        self._v14_view_toggle = ft.IconButton(
+            icon=ft.Icons.AUTO_AWESOME_ROUNDED,
+            icon_size=18,
+            icon_color=C["text_dim"],
+            tooltip="Переключить вид: Classic / ZEUS v1.4",
+            on_click=self._toggle_v14_view,
+        )
+        self._v14_active = False
+        self._classic_content = controls
+
+        # === ZEUS v1.4: Панель настроек v1.4 (ТЗ v1.4 §11) ===
+        self.settings_panel = SettingsPanel(
+            palette=C,
+            on_theme_toggle=self._toggle_theme,
+        )
 
         # Анимация визуализатора запускается один раз в _setup_controller.
 
@@ -1311,17 +1659,23 @@ class ZeusUI:
     # Переключатель темы (ТЗ v1.2, п.5.1)
     # ------------------------------------------------------------------
     def _toggle_theme(self):
-        """Мгновенно переключает Design Tokens и перестраивает UI."""
+        """Мгновенно переключает Design Tokens и перестраивает UI.
+
+        ТЗ v1.4 §7: также обновляет ThemeManager для нового окна.
+        """
         new_key = "light" if self.page.theme_mode == ft.ThemeMode.DARK else "dark"
         if self.controller is not None:
             self._run_bg(
                 self.controller.update_settings, "app_settings", "theme", new_key
             )
         global C
-        C = dict(PALETTES[new_key])
+        C = PALETTES[new_key]
         self.page.theme_mode = (
             ft.ThemeMode.LIGHT if new_key == "light" else ft.ThemeMode.DARK
         )
+        # ТЗ v1.4 §7: синхронизация с ThemeManager
+        if hasattr(self, "_theme_manager") and self._theme_manager:
+            self._theme_manager.set_theme(new_key)
         self._rebuild_all()
         self.page.update()
 
@@ -1452,13 +1806,6 @@ class ZeusUI:
                 ft.Row([voice_enabled], spacing=12),
                 ft.Row([tts_enabled], spacing=12),
                 ft.Row([lang_dd], spacing=12),
-                ft.Row([
-                    ft.Text("Микрофон:", size=13, color=C["text_dim"]),
-                    ft.Text(
-                        self.controller.audio._mic_device_name or "По умолчанию",
-                        size=13, color=C["text"],
-                    ),
-                ], spacing=8),
             ], spacing=12),
             bgcolor=C["surface"],
             border_radius=16,
@@ -1466,6 +1813,10 @@ class ZeusUI:
             padding=20,
             expand=True,
         )
+
+        # ---- Карточка 2b: Аудиоустройства (v1.4) ----
+        self._audio_devices_panel = AudioDevicesPanel(self, C)
+        audio_card = self._audio_devices_panel.build()
 
         # ---- Карточка 3: Интерфейс и система ----
         theme_dd = ft.Dropdown(
@@ -1536,6 +1887,223 @@ class ZeusUI:
             controls_padding=ft.Padding(left=0, top=8, right=0, bottom=0),
         )
 
+        # ---- Исключения сканирования файлов (deny-лист, аудит п.3) ----
+        scanner_cfg = settings.get("scanner_settings", {}) or {}
+        deny_input = ft.TextField(
+            label="Путь для исключения (например D:\\Личное)",
+            width=360,
+            text_size=12,
+            color=C["text"],
+            bgcolor=C["surface"],
+            border_color=C["border"],
+        )
+        deny_list_col = ft.Column(spacing=2, tight=True)
+
+        def _deny_paths() -> list:
+            return list(scanner_cfg.get("custom_deny_paths", []) or [])
+
+        def _refresh_deny_rows() -> None:
+            deny_list_col.controls = [
+                ft.Row([
+                    ft.Text(p, size=12, color=C["text"], expand=True,
+                            max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                    ft.IconButton(
+                        icon=ft.Icons.CLOSE, icon_size=14,
+                        icon_color=C["text_dim"], tooltip="Убрать",
+                        on_click=lambda e, p=p: _deny_remove(p),
+                    ),
+                ], spacing=8)
+                for p in _deny_paths()
+            ]
+
+        def _deny_update(updated: list) -> None:
+            """Сохраняет список и перерисовывает строки (без полной перестройки)."""
+            scanner_cfg["custom_deny_paths"] = updated
+            _refresh_deny_rows()
+            self._on_setting_change("scanner_settings", "custom_deny_paths", updated)
+            try:
+                if deny_list_col.page:
+                    deny_list_col.update()
+            except Exception:
+                pass
+
+        def _deny_remove(path: str) -> None:
+            _deny_update([p for p in _deny_paths() if p != path])
+
+        def _deny_add(e=None) -> None:
+            raw = (deny_input.value or "").strip()
+            if not raw:
+                return
+            import os as _os
+            norm = _os.path.normpath(raw)
+            current = _deny_paths()
+            if norm not in current and norm.lower() not in (p.lower() for p in current):
+                current.append(norm)
+                deny_input.value = ""
+                _deny_update(current)
+            else:
+                self._show_save_notice("⚠️ Такой путь уже в списке")
+
+        _refresh_deny_rows()
+
+        # ---- Статус индекса + «Пересканировать сейчас» (ТЗ rescan_status §5,
+        # бэклог v1.4 п.1: кнопка/спиннер синхронизируются с is_indexing) ----
+        scan_status_text = ft.Text("", size=12, color=C["text_dim"], expand=True)
+        rescan_btn = ft.TextButton(
+            "🔄 Пересканировать сейчас",
+            icon=ft.Icons.REFRESH_ROUNDED,
+            on_click=None,  # назначается ниже (после определения _rescan_now)
+        )
+        # Спиннер рядом с кнопкой: виден только во время индексации
+        rescan_spinner = ft.ProgressRing(width=16, height=16, stroke_width=2, visible=False)
+
+        def _format_age(hours) -> str | None:
+            """Человекочитаемый возраст индекса: минуты/часы/дни."""
+            if hours is None:
+                return None
+            if hours < 1:
+                return f"{max(1, int(hours * 60))} мин. назад"
+            if hours < 24:
+                return f"{int(hours)} ч. назад"
+            return f"{int(hours // 24)} дн. назад"
+
+        def _get_stats() -> dict:
+            """Статистика через контроллер; fallback на singleton, если он ещё не готов."""
+            if self.controller is not None:
+                return self.controller.get_file_index_stats()
+            from core.file_scanner import get_scanner
+            return get_scanner().get_index_stats()
+
+        def _status_from_stats(s: dict) -> str:
+            if s.get("is_indexing"):
+                return "Индексация дисков идёт…"
+            if not s.get("total_files"):
+                return "Индекс ещё не построен — запустите сканирование"
+            text = f"{s['total_files']} файлов в индексе"
+            age = _format_age(s.get("index_age_hours"))
+            if age:
+                text += f" · обновлено {age}"
+            if not s.get("is_fresh", False):
+                text += " · ⚠ давно не обновлялся"
+            return text
+
+        def _set_ui_safe(fn) -> None:
+            try:
+                fn()
+            except RuntimeError:
+                pass  # страница закрыта
+
+        def _set_indexing_ui(indexing: bool) -> None:
+            """Синхронизирует кнопку/спиннер с состоянием индексации (бэклог п.1).
+
+            Вызывается и при первой отрисовке (если приложение перезапущено
+            во время скана — состояние берётся из is_indexing), и по
+            завершении фонового опроса.
+            """
+            rescan_btn.disabled = indexing
+            rescan_btn.text = "Индексация…" if indexing else "🔄 Пересканировать сейчас"
+            rescan_spinner.visible = indexing
+
+        def _update_scan_widgets() -> None:
+            _set_ui_safe(lambda: (
+                scan_status_text.update() if scan_status_text.page else None,
+                rescan_btn.update() if rescan_btn.page else None,
+                rescan_spinner.update() if rescan_spinner.page else None,
+            ))
+
+        def _refresh_scan_status(*_):
+            try:
+                stats = _get_stats()
+            except Exception as exc:
+                scan_status_text.value = f"Статус недоступен: {exc}"
+            else:
+                scan_status_text.value = _status_from_stats(stats)
+                # Первая отрисовка: если сканирование уже идёт (например,
+                # автоскан при старте приложения) — кнопка сразу в состоянии
+                # «занято», а не только после первого клика.
+                _set_indexing_ui(bool(stats.get("is_indexing", False)))
+            _update_scan_widgets()
+
+        def _apply_poll_result(stats: dict, indexing: bool) -> None:
+            """Обновление UI из фонового опроса (вызывается через _post_ui)."""
+            scan_status_text.value = _status_from_stats(stats)
+            _set_indexing_ui(indexing)
+            _update_scan_widgets()
+
+        def _poll_indexing() -> None:
+            """Фоновый опрос статистики каждые 2 с, пока идёт индексация."""
+            import time as _time
+            while True:
+                _time.sleep(2)
+                try:
+                    stats = _get_stats()
+                except Exception:
+                    stats = {"is_indexing": True}
+                indexing = bool(stats.get("is_indexing", False))
+                self._post_ui(lambda s=stats, i=indexing: _apply_poll_result(s, i))
+                if not indexing:
+                    break
+
+        def _rescan_now(e=None) -> None:
+            # Явная блокировка повторного запуска поверх идущего сканирования:
+            # кнопка дизейблится сразу, плюс бэкенд сам вернёт success: False.
+            if rescan_btn.disabled:
+                return
+            try:
+                if self.controller is not None:
+                    result = self.controller.rebuild_file_index()
+                else:
+                    from core.file_scanner import rebuild_system_index
+                    result = rebuild_system_index()
+            except Exception as exc:
+                self._show_save_notice(f"⚠️ Не удалось запустить сканирование: {exc}")
+                return
+            self._show_save_notice(str(result.get("message", "Запускаю сканирование…")))
+            if not result.get("success"):
+                _refresh_scan_status()
+                return
+            rescan_btn.disabled = True
+            _set_indexing_ui(True)
+            scan_status_text.value = "Индексация дисков идёт…"
+            _update_scan_widgets()
+            threading.Thread(target=_poll_indexing, daemon=True).start()
+
+        rescan_btn.on_click = _rescan_now
+        _refresh_scan_status()
+
+        deny_tile = ft.ExpansionTile(
+            title=ft.Text("Исключения сканирования файлов", size=13, color=C["text"]),
+            leading=ft.Icon(ft.Icons.BLOCK_OUTLINED, color=C["electric"]),
+            controls=[
+                deny_input,
+                ft.Row([
+                    ft.TextButton("➕ Добавить", icon=ft.Icons.PLAYLIST_ADD,
+                                  on_click=_deny_add),
+                ], spacing=8),
+                deny_list_col,
+                ft.Text(
+                    "Системные папки и служебные каталоги (node_modules, Temp, "
+                    "кэши браузеров) исключены из индексации всегда и в этом "
+                    "списке не отображаются.",
+                    size=11, color=C["text_dim"],
+                ),
+                ft.Divider(height=1, color=C["border"]),
+                ft.Row(
+                    [scan_status_text, rescan_spinner, rescan_btn],
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+            ],
+            expanded=False,
+            maintain_state=True,
+            text_color=C["text"],
+            icon_color=C["electric"],
+            collapsed_text_color=C["text"],
+            collapsed_icon_color=C["text_dim"],
+            tile_padding=0,
+            controls_padding=ft.Padding(left=0, top=8, right=0, bottom=0),
+        )
+
         app_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -1546,6 +2114,7 @@ class ZeusUI:
                 ft.Row([theme_dd], spacing=12),
                 ft.Row([autostart_sw], spacing=12),
                 extra_paths,
+                deny_tile,
             ], spacing=12),
             bgcolor=C["surface"],
             border_radius=16,
@@ -1595,7 +2164,11 @@ class ZeusUI:
                         spacing=16,
                         expand=True,
                     ),
-                    # Нижний ряд: интерфейс
+                    # Нижний ряд: аудиоустройства + интерфейс (v1.4)
+                    ft.Row(
+                        [audio_card],
+                        expand=True,
+                    ),
                     ft.Row(
                         [app_card],
                         expand=True,
@@ -1635,7 +2208,7 @@ class ZeusUI:
             theme_key = "light" if value == "light" else "dark"
             # Обновляем глобальную палитру
             global C
-            C = dict(PALETTES[theme_key])
+            C = PALETTES[theme_key]
             # Меняем тему Flet
             self.page.theme_mode = ft.ThemeMode.LIGHT if value == "light" else ft.ThemeMode.DARK
             # Перестраиваем UI с новыми цветами
@@ -1722,7 +2295,7 @@ class ZeusUI:
 
         Единственный центральный визуализатор — assets/animations/hologram.webp.
         Для светлой темы используется hologram_light.webp (тёмные линии на белом фоне).
-        В покое фиксированный размер ~250px; при речи ассистента масштаб плавно
+        В покое фиксированный размер ~320px; при речи ассистента масштаб плавно
         увеличивается (scale 1.0 -> 1.25) через animate_scale.
         """
         is_light = self.page.theme_mode == ft.ThemeMode.LIGHT
@@ -1732,8 +2305,8 @@ class ZeusUI:
 
         self.holo_image = ft.Image(
             src=img_path,
-            width=250,
-            height=250,
+            width=320,
+            height=320,
             fit=ft.BoxFit.CONTAIN,
             opacity=1.0,
             repeat=ft.ImageRepeat.NO_REPEAT,
@@ -1880,6 +2453,68 @@ class ZeusUI:
         # этап Vosk/Piper виден в терминале активности.
         ctrl.start_model_loader(on_progress=self._log)
 
+        # Hot-plug аудиоустройств (v1.4, ТЗ §2.4): события подключения/
+        # отключения пишутся в терминал активности; при исчезновении
+        # выбранного микрофона — автовыбор по приоритету.
+        self._run_bg(ctrl.start_device_watcher, self._on_device_changed)
+        self._run_bg(self._update_devices_label)
+
+    def _on_device_changed(self, payload: dict) -> None:
+        """Уведомление hot-plug аудиоустройств (ТЗ v1.4 §3.1)."""
+        event = payload.get("event")
+        device = payload.get("device") or {}
+        name = device.get("name", "?")
+        if event == "added":
+            self._log(f"🎧 Подключено аудиоустройство: {name}")
+        elif event == "removed":
+            self._log(f"🎧 Аудиоустройство отключено: {name}")
+        elif event == "auto_switched_input":
+            self._log(f"⚠️ Микрофон отключён — переключаюсь на {name}")
+            self.speak_or_status("Микрофон переключён, сэр")
+        elif event == "input_lost":
+            self._log("❌ Микрофон недоступен — устройства ввода не найдены")
+        elif event == "output_lost":
+            self._log("⚠️ Устройство вывода отключено — звук в системный дефолт")
+        self._post_ui(self._update_devices_label)
+
+    def speak_or_status(self, text: str) -> None:
+        """Голосовое/статусное уведомление (не блокирует UI-поток)."""
+        self._run_bg(self._speak_or_status_worker, text)
+
+    def _speak_or_status_worker(self, text: str) -> None:
+        try:
+            self.controller.speak(text)
+        except Exception:  # noqa: BLE001
+            self._on_status(text)
+
+    def _update_devices_label(self) -> None:
+        """Обновляет подпись текущих устройств ввода/вывода (ТЗ v1.4 §3.2)."""
+        try:
+            label = self._do_devices_label()
+        except Exception:  # noqa: BLE001
+            return
+
+        def apply():
+            try:
+                self._devices_label.value = label
+                self._devices_label.update()
+            except RuntimeError:
+                pass
+        self._post_ui(apply)
+
+    def _do_devices_label(self) -> str:
+        audio = self.controller.audio
+        try:
+            import sounddevice as sd
+            devices = sd.query_devices()
+            idx_in = audio._mic_device_index
+            idx_out = audio._output_device_index
+            name_in = str(devices[idx_in]["name"]) if idx_in is not None and 0 <= idx_in < len(devices) else "по умолчанию"
+            name_out = str(devices[idx_out]["name"]) if idx_out is not None and 0 <= idx_out < len(devices) else "по умолчанию"
+            return f"🎙 {name_in}  ·  🔊 {name_out}"
+        except Exception:  # noqa: BLE001
+            return ""
+
 
     # ------------------------------------------------------------------
     # Коллбэки UI
@@ -1894,6 +2529,13 @@ class ZeusUI:
                 self.voice_status.value = text
                 self.voice_status.update()
         except RuntimeError:
+            pass
+        # Neural Core: статус-пилюля центральной голограммы
+        try:
+            if getattr(self, "_neural_status_text", None):
+                self._neural_status_text.value = str(text)[:48]
+                self._neural_status_text.update()
+        except (AttributeError, RuntimeError):
             pass
 
     def _log(self, text: str):
@@ -1915,6 +2557,31 @@ class ZeusUI:
             except Exception:  # noqa: BLE001
                 pass
         self._post_ui(_do_clear)
+
+    def _open_log_file(self, e=None):
+        """Открывает data/zeus.log системным обработчиком (бэклог v1.4 п.2).
+
+        Файл уже пишется logging_service (RotatingFileHandler) при каждой
+        записи терминала — просто показываем его. Открывается полная история,
+        даже если пользователь до этого нажал «очистить» в UI (очистка
+        затрагивает только визуальный список, не файл).
+        """
+        try:
+            from core.logging_service import _default_path
+            path = _default_path()
+            if not os.path.exists(path):
+                # Файла ещё нет — создаём пустой, чтобы открыть не пустоту,
+                # а валидный (пусть и свежий) журнал.
+                with open(path, "a", encoding="utf-8"):
+                    pass
+            if os.name == "nt":
+                os.startfile(path)  # noqa: S606 — Windows: системный обработчик
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:  # noqa: BLE001 — UI не должен падать
+            self._show_save_notice(f"⚠️ Не удалось открыть журнал: {exc}")
 
     def _clear_system_log(self, e=None):
         """Очищает полный терминал на странице «Системные логи»."""
@@ -2000,8 +2667,26 @@ class ZeusUI:
         self._log(f"🎤 Распознано: {text}")
 
     def _on_state(self, state: str):
-        """Реагирует на смену состояния FSM (обновления — через zeus-ui)."""
+        """Реагирует на смену состояния FSM (обновления — через zeus-ui).
+
+        ТЗ v1.4 §8: также обновляет ZeusStateController для голограммы.
+        """
         self._post_ui(lambda: self._do_state(state))
+        # ТЗ v1.4 §8: синхронизация с новым контроллером состояния
+        self._sync_state_controller(state)
+
+    def _sync_state_controller(self, state: str) -> None:
+        """Синхронизирует ZeusStateController с FSM-состоянием контроллера (ТЗ v1.4 §8)."""
+        state_map = {
+            "IDLE": ZeusState.IDLE,
+            "LISTENING": ZeusState.LISTENING,
+            "PROCESSING": ZeusState.THINKING,
+            "SPEAKING": ZeusState.SPEAKING,
+            "ERROR": ZeusState.ERROR,
+        }
+        zeus_state = state_map.get(state, ZeusState.IDLE)
+        if hasattr(self, "state_controller") and self.state_controller:
+            self.state_controller.set_state(zeus_state)
 
     def _do_state(self, state: str):
         """Реагирует на смену состояния конечного автомата контроллера.

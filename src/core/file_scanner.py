@@ -27,14 +27,56 @@ import psutil
 
 # === Пути к файлам ===
 
-def _cache_path() -> str:
-    """Возвращает путь к file_cache.json рядом с исполняемым файлом."""
-    return config.data_path("file_cache.json")
-
-
 def _index_path() -> str:
     """Возвращает путь к index.json рядом с исполняемым файлом."""
     return config.data_path("index.json")
+
+
+def _index_meta_path() -> str:
+    """Возвращает путь к index_meta.json (метаданные последнего сканирования)."""
+    return config.data_path("index_meta.json")
+
+
+def save_index_meta(total_files: int, external_files: int) -> None:
+    """Сохраняет метаданные последнего сканирования (ТЗ rescan_status §3).
+
+    index.json хранит только сам индекс — без отметки времени, поэтому
+    честный возраст индекса брать неоткуда. Метаданные (last_scan_at UTC,
+    счётчики файлов) пишутся рядом в index_meta.json и читаются
+    get_index_stats().
+    """
+    try:
+        meta = {
+            "last_scan_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + "Z",
+            "total_files": int(total_files),
+            "external_files": int(external_files),
+        }
+        path = _index_meta_path()
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        # Метаданные не критичны: сбой записи не должен ронять индексацию
+        pass
+
+
+def load_index_meta() -> dict[str, Any]:
+    """Читает метаданные последнего сканирования.
+
+    Тихий fallback на пустой dict: сканирования ещё не было или файл
+    повреждён — статистика просто не покажет возраст, не падая.
+    """
+    try:
+        path = _index_meta_path()
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
 
 
 # === Исключения: системные папки ===
@@ -63,6 +105,52 @@ _EXCLUDED_DIRS = {
 
 # Расширения для поиска
 _TARGET_EXTENSION = ".exe"
+
+
+# === Исключения: настраиваемый deny-лист (аудит п.3) ===
+
+def _load_deny_lists() -> tuple[set[str], list[str]]:
+    """Загружает deny-списки сканера: имена папок + пользовательские пути.
+
+    Системный ``_EXCLUDED_DIRS`` исключается всегда и не отключается через
+    настройки (защита от сканирования System32 и подобного). Поверх него
+    берутся ``scanner_settings`` из SettingsManager: ``deny_dir_names``
+    (имена папок) и ``custom_deny_paths`` (полные пути из UI). При
+    повреждённых/недоступных настройках — фолбэк на системный список:
+    индексация не должна падать целиком из-за проблемы с конфигом.
+    """
+    excluded_names = {d.lower() for d in _EXCLUDED_DIRS}
+    custom_paths: list[str] = []
+    try:
+        scanner = config.load_settings().get("scanner_settings", {}) or {}
+        for name in scanner.get("deny_dir_names", []) or []:
+            if isinstance(name, str) and name.strip():
+                excluded_names.add(name.strip().lower())
+        for path in scanner.get("custom_deny_paths", []) or []:
+            if isinstance(path, str) and path.strip():
+                custom_paths.append(os.path.normpath(path.strip()))
+    except Exception:  # noqa: BLE001 — фолбэк на системный список
+        pass
+    return excluded_names, custom_paths
+
+
+def _is_denied_path(path: str, custom_paths: list[str]) -> bool:
+    """Проверяет полный путь папки по ``custom_deny_paths``.
+
+    Точное совпадение или совпадение по префиксу (папка исключается целиком,
+    вместе с содержимым). Сравнение регистронезависимое — как Windows-пути.
+    """
+    if not custom_paths:
+        return False
+    try:
+        norm = os.path.normpath(path).lower()
+    except Exception:  # noqa: BLE001
+        return False
+    for denied in custom_paths:
+        d = str(denied).lower()
+        if norm == d or norm.startswith(d + os.sep):
+            return True
+    return False
 
 
 # === Индексация ===
@@ -118,11 +206,18 @@ def load_index() -> dict[str, dict]:
 
 
 def save_index(index: dict[str, dict]) -> None:
-    """Сохраняет индекс в index.json (новый формат с тегом source)."""
+    """Сохраняет индекс в index.json (новый формат с тегом source).
+
+    Запись атомарна (tmp + os.replace): прямая запись через open("w")
+    сначала усекает файл — обрыв процесса посреди json.dump оставлял
+    бы пустой/битый index.json и терял бы весь индекс.
+    """
     try:
         path = _index_path()
-        with open(path, "w", encoding="utf-8") as f:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(index, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
     except Exception:
         pass
 
@@ -140,14 +235,25 @@ def build_index(search_paths: list[str], max_workers: int = 4) -> dict[str, str]
     """
     index: dict[str, str] = {}
     lock = threading.Lock()
+    # Deny-листы загружаются один раз на весь билд (имена папок —
+    # регистронезависимо; полные пути — через _is_denied_path).
+    excluded_names, custom_deny = _load_deny_lists()
 
     def scan_directory(root_path: str) -> dict[str, str]:
         """Сканирует одну директорию и возвращает найденные .exe файлы."""
         local_index: dict[str, str] = {}
+        if _is_denied_path(root_path, custom_deny):
+            return local_index  # корень сканирования сам в deny-листе
         try:
             for root, dirs, files in os.walk(root_path):
-                # Пропускаем системные папки
-                dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS and not d.startswith("$")]
+                # Пропускаем системные папки (без учёта регистра), служебные
+                # "$..." и всё из настраиваемых deny-листов (аудит п.3).
+                dirs[:] = [
+                    d for d in dirs
+                    if d.lower() not in excluded_names
+                    and not d.startswith("$")
+                    and not _is_denied_path(os.path.join(root, d), custom_deny)
+                ]
 
                 for file in files:
                     if file.lower().endswith(_TARGET_EXTENSION):
@@ -367,6 +473,11 @@ class FileScanner:
 
                 self._index = new_index
                 save_index(new_index)
+                # Метаданные сканирования: время/счётчики для get_index_stats
+                external_count = sum(
+                    1 for m in new_index.values() if m.get("source") == "external"
+                )
+                save_index_meta(len(new_index), external_count)
             finally:
                 with self._index_lock:
                     self._indexing = False
@@ -385,17 +496,42 @@ class FileScanner:
         return self._indexing
 
     def get_index_stats(self) -> dict[str, Any]:
-        """Возвращает статистику индекса."""
+        """Возвращает статистику индекса (реальные данные, ТЗ rescan_status §3).
+
+        index_age_hours вычисляется от last_scan_at в index_meta.json;
+        None, если сканирования ещё не было. is_fresh — возраст < 24 часов
+        (раньше оба поля были константами в коде: 0 часов / «свежий»).
+        is_indexing — идёт ли индексация прямо сейчас (для UI-спиннера и
+        блокировки повторного запуска).
+        """
         files = self._index
         total = len(files) if isinstance(files, dict) else 0
         external = sum(1 for m in files.values() if m.get("source") == "external") if isinstance(files, dict) else 0
+
+        age_hours: float | None = None
+        meta = load_index_meta()
+        last_scan_at = meta.get("last_scan_at")
+        if isinstance(last_scan_at, str):
+            try:
+                from datetime import datetime, timezone
+
+                ts = datetime.strptime(
+                    last_scan_at.rstrip("Z"), "%Y-%m-%dT%H:%M:%S"
+                ).replace(tzinfo=timezone.utc)
+                age_hours = max(
+                    0.0, (datetime.now(timezone.utc) - ts).total_seconds() / 3600.0
+                )
+            except (ValueError, TypeError):
+                age_hours = None
 
         return {
             "total_files": total,
             "total_paths": total,
             "external_files": external,
-            "index_age_hours": 0,
-            "is_fresh": True,
+            "index_age_hours": age_hours,
+            "is_fresh": age_hours is not None and age_hours < 24,
+            "last_scan_at": last_scan_at,
+            "is_indexing": self._indexing,
         }
 
 

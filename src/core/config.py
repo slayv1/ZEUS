@@ -79,7 +79,7 @@ def data_path(relative_path: str) -> str:
     """Возвращает путь к изменяемому файлу внутри папки data/.
 
     Для файлов, которые могут изменяться в процессе работы программы:
-    settings.json, commands.json, index.json, file_cache.json.
+    settings.json, commands.json, index.json.
     При запуске .exe эти файлы читаются из папки data/ рядом с .exe,
     а в режиме разработки — из папки data/ в корне проекта.
     """
@@ -140,6 +140,20 @@ DEFAULT_SETTINGS = {
         # Порог чувствительности Wake Word (энергетический фильтр / VAD):
         # ниже — детектор чувствительнее, но чаще ложные срабатывания на шум/эхо.
         "wake_energy_threshold": 30,
+        # --- Аудиоустройства (v1.4, ТЗ §2.7) ---
+        # Стабильные endpoint-ID Core Audio (строки GUID). Числовые индексы
+        # sounddevice в конфиг НЕ пишутся — они нестабильны между запусками
+        # и hot-plug; индекс резолвится по ID на лету.
+        "input_device_id": None,
+        "output_device_id": None,
+        # Автопереключение на следующее по приоритету устройство при
+        # отключении текущего (ручной выбор имеет приоритет, пока устройство живо).
+        "device_auto_switch": True,
+        # Порядок предпочтения типов устройств при автовыборе.
+        "device_priority": [
+            "bluetooth_headset", "wired_headset", "usb_microphone",
+            "builtin_microphone", "bluetooth_headphones", "builtin_speakers",
+        ],
     },
     "app_settings": {
         "theme": "dark",
@@ -160,6 +174,18 @@ DEFAULT_SETTINGS = {
         "dictionary": "./data/dictionary.json",
         "vosk_model_path": "models/vosk-model-small-ru-0.22",
         "piper_model_path": "models/tts/voice.onnx",
+    },
+    # Настройки сканера файлов (аудит п.3: deny-лист индексации дисков).
+    "scanner_settings": {
+        # Имена папок, исключаемые из сканирования в любом месте диска
+        # (базовые дефолты; системный список _EXCLUDED_DIRS в file_scanner
+        # исключается всегда, независимо от этих настроек).
+        "deny_dir_names": [
+            "node_modules", ".git", "Temp", "tmp", "Packages",
+            "CrashDumps", "Cache", "cache2", "GPUCache", "INetCache",
+        ],
+        # Полные пути, добавленные пользователем через UI настроек.
+        "custom_deny_paths": [],
     },
 }
 
@@ -222,9 +248,10 @@ def _migrate_old_settings(data: dict) -> dict:
     # Если уже новая структура — используем как есть
     if any(section in data for section in (
         "ai_settings", "voice_settings", "app_settings", "audio", "paths",
-        "theme", "auto_listening",
+        "scanner_settings", "theme", "auto_listening",
     )):
-        for section in ("ai_settings", "voice_settings", "app_settings", "audio", "paths"):
+        for section in ("ai_settings", "voice_settings", "app_settings", "audio",
+                        "paths", "scanner_settings"):
             if section in data:
                 if isinstance(data[section], dict):
                     migrated[section].update(data[section])
@@ -391,7 +418,8 @@ def load_settings() -> dict:
                 data = json.load(f)
             # Миграция и обновление
             migrated = _migrate_old_settings(data)
-            for section in ("ai_settings", "voice_settings", "app_settings", "audio", "paths"):
+            for section in ("ai_settings", "voice_settings", "app_settings",
+                            "audio", "paths", "scanner_settings"):
                 settings[section].update(migrated[section])
             settings = _normalize_v13_settings(settings)
     except Exception:

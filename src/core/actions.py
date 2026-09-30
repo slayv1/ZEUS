@@ -41,7 +41,10 @@ def _handle_time_date_command(text: str) -> dict[str, Any] | None:
         r"сколько\s+(сейчас\s+)?времени|который\s+час\s+сейчас)", low))
     is_date = bool(re.search(
         r"(какое(\s+сегодня)?\s*число|какая(\s+сегодня)?\s*дата|какой(\s+сегодня)?\s*день|"
-        r"дата|число|сегодня|какой\s+день\s+недели)", low))
+        r"какой\s+день\s+недели|(?:скажи|назови|сообщи|уточни)\s+(?:мне\s+)?"
+        r"(?:дату|число|день|сегодняш\w*\s+дат\w*))",
+        low,
+    ))
     if not (is_time or is_date):
         return None
     now = datetime.datetime.now()
@@ -80,8 +83,18 @@ def _safe_calc(expr: str) -> float | None:
     expr = re.sub(r"\*\*+", "**", expr)
     if not re.fullmatch(r"[\d+\-*/(). ]+", expr) or not re.search(r"\d", expr):
         return None
+    if len(expr) > 100:
+        # Защита от чрезмерно длинных выражений (тоже влияет на стоимость eval).
+        return None
+    # Защита от DoS через непомерно большую степень/число: "9 в степени 999999999"
+    # проходит regex-фильтр выше (это просто цифры и **), но eval() на таком
+    # выражении надолго займёт CPU и выделит гигантский int. Ограничиваем длину
+    # операндов вокруг "**", а не сам факт наличия степени.
+    for base, exp in re.findall(r"(\d+)\s*\*\*\s*(\d+)", expr):
+        if len(exp) > 4 or len(base) > 6:  # степень < 10000, основание < 10^6
+            return None
     try:
-        return float(eval(expr, {"__builtins__": {}}, {}))  # noqa: S307 — вход фильтрован
+        return float(eval(expr, {"__builtins__": {}}, {}))  # noqa: S307 — вход фильтрован, степень ограничена
     except Exception:  # noqa: BLE001
         return None
 
@@ -280,6 +293,8 @@ def load_commands() -> dict[str, Any]:
         # Файл временно нечитаем (запись/битый JSON) — отдаём прошлый кеш.
         return _CMDS_CACHE if _CMDS_CACHE is not None else {"приложения": {}, "игры": {}}
     first = _CMDS_CACHE is None
+    if not isinstance(data, dict):
+        return _CMDS_CACHE if _CMDS_CACHE is not None else {"приложения": {}, "игры": {}}
     _CMDS_CACHE = data
     _CMDS_CACHE_MTIME = mtime
     if first:
@@ -313,11 +328,63 @@ def reload_commands() -> dict[str, Any]:
 
 # === Парсинг команд ===
 
-# Ключевые слова, которые указывают на системную команду
+# Ключевые слова, которые указывают на системную команду.
+# Примечание (websearch/weather): «погугли»/«погода» сюда НЕ добавлены —
+# их хендлеры (_handle_websearch_command/_handle_weather_command) вызываются
+# в execute_command() ДО этой проверки-гейта, гейт нужен только для
+# ветки запуска приложений. Добавление «погода» ломало обычную речь
+# («анекдот про погоду» -> ложная «системная команда» вместо LLM).
 _COMMAND_KEYWORDS = re.compile(
     r"\b(открой|открыть|запусти|запустить|закрой|закрыть|выключи|запомни|найди|найти|обнови|удали|close|open|launch|start|stop|find|update|delete)\b",
     re.IGNORECASE,
 )
+
+# --- Веб-поиск: триггеры (ТЗ websearch_weather §1.2) ---
+_WEBSEARCH_MARKERS = (
+    "погугли", "загугли", "поищи в интернете", "найди в интернете",
+    "поиск в интернете", "погуглить", "загуглить",
+)
+
+# --- Погода MVP (ТЗ websearch_weather §2.1) ---
+# Строгие вопросные паттерны: слово «погода» само по себе встречается в
+# обычной речи («анекдот про погоду», «погода — это тема»), поэтому
+# перехватываем только явные вопросы или «погода в {город}».
+_WEATHER_QUESTION_RE = re.compile(
+    r"(?:^|\s)("
+    r"(?:какая|какова|как)\s+(?:сейчас\s+)?(?:погода|погодка|погоду)"  # какая погода
+    r"|(?:скажи|покажи|посмотри|глянь|интересно)\s+(?:мне\s+)?погоду?"  # скажи погоду
+    r"|погода[у]?\s+в\s+\w+"                                            # погода в Москве
+    r"|(?:^|\s)погода[у]?\s*$"                                          # просто «погода»
+    r")",
+    re.IGNORECASE,
+)
+
+_WEATHER_TRIGGERS = ("погода", "погоду", "погоде", "погодка", "weather")
+
+# Служебные фразы для извлечения города из погодной команды.
+_WEATHER_SERVICE_PHRASES = (
+    "зевс", "пожалуйста", "какая погода", "какая сейчас погода",
+    "какая погода в", "скажи погоду в", "покажи погоду в",
+    "какая погодка", "сколько градусов", "как погода",
+    "какая погода сейчас", "погода в", "погоду в", "погода", "погоду",
+    "погоде", "погодка", "сейчас", "в городе",
+)
+
+# Обращения/вводные, которые Vosk захватывает в начале фразы и которые
+# иначе «прилипают» к городу (из логов 22.09: «офицер душанбе»,
+# «саша москве» → geocode не находил город → уход в браузерный фолбэк).
+# Вырезаются только как отдельные слова (\b), чтобы не резать города
+# (например, «Даугавпилс» не заденет \bда\b).
+_WEATHER_VOCATIVE_RE = re.compile(
+    r"\b(?:сэр|сэры|офицер|саша|шеф|босс|"
+    r"начальник|джарвис|зевс|зевес|зевсе|помощник|ассистент|"
+    r"знаешь|да|ну|давай)\b",
+    re.IGNORECASE,
+)
+
+# Русские названия городов могут содержать «ё», дефисы и т.д. — просто
+# схлопываем пробелы и убираем краевую пунктуацию после вырезания служебных.
+_WEATHER_CITY_RE = re.compile(r"\s+")
 
 # Паттерны для извлечения имени программы/игры
 _APP_NAME_PATTERN = re.compile(
@@ -929,8 +996,7 @@ _STORE_LAUNCH_VERBS = ("запусти", "запустить", "играй", "и
 def _extract_store_query(text: str) -> str | None:
     """Извлекает название игры из фразы про магазин Steam.
 
-    Порядок важен: сначала вырезаются длинные словосочетания,
-    затем одиночные ключевые слова.
+    Порядок вырезания: длинные словосочетания, затем одиночные ключевые слова.
     """
     q = (text or "").lower().strip()
     for phrase in (
@@ -944,6 +1010,140 @@ def _extract_store_query(text: str) -> str | None:
         q = q.replace(phrase, " ")
     q = re.sub(r"\s+", " ", q).strip(" -.,!?")
     return q or None
+
+
+# === Веб-поиск и погода (ТЗ websearch_weather §1, §2.1) ===
+
+def _extract_websearch_query(text: str, marker: str) -> str | None:
+    """Вырезает из фразы триггер-маркер веб-поиска, оставляя сам запрос.
+
+    Аналог clean_query() из taobao_core: вырезаем по подстроке маркера
+    (маркеры веб-поиска достаточно уникальны), схлопываем пробелы.
+    Пример: «погугли курс доллара» -> «курс доллара».
+    """
+    q = (text or "").lower()
+    # Длинные маркеры вырезаем первыми, чтобы «найди в интернете» не оставляла «найди».
+    for m in sorted(_WEBSEARCH_MARKERS, key=len, reverse=True):
+        if m in q:
+            q = q.replace(m, " ")
+    q = q.replace(marker, " ")
+    # Служебные слова-обвязка (не трогаем сам запрос)
+    for svc in ("зевс", "пожалуйста", "сэр", "в интернете", "в гугле", "в google"):
+        q = q.replace(svc, " ")
+    q = re.sub(r"\s+", " ", q).strip(" -.,!?")
+    return q or None
+
+
+def _handle_websearch_command(text: str) -> dict[str, Any] | None:
+    """Веб-поиск «погугли X» / «поищи в интернете X» (ТЗ websearch_weather §1).
+
+    Открывает браузер с результатами Google (тот же паттерн, что taobao_core:
+    webbrowser.open + urllib.parse.quote, фоновый daemon-поток). Результаты
+    не читаются вслух — осознанное ограничение версии, как в видео-референсе.
+
+    Возвращает None, если фраза не веб-поиск (не перехватывает обычную речь).
+    """
+    low = (text or "").lower()
+    marker = next((m for m in _WEBSEARCH_MARKERS if m in low), None)
+    if not marker:
+        return None
+
+    query = _extract_websearch_query(text, marker)
+    if not query:
+        return {
+            "success": False,
+            "message": "Не понял, что искать, сэр. Повторите запрос.",
+            "action": "websearch",
+        }
+
+    import webbrowser
+    from urllib.parse import quote
+
+    url = f"https://www.google.com/search?q={quote(query)}"
+    threading.Thread(target=webbrowser.open, args=(url,), daemon=True,
+                     name="zeus-websearch").start()
+    return {
+        "success": True,
+        "message": f"Ищу «{query}» в интернете, сэр. Открываю браузер.",
+        "action": "websearch",
+        "query": query,
+        "url": url,
+    }
+
+
+def _extract_weather_city(text: str) -> str | None:
+    """Вырезает город из погодной фразы: «погода в Москве» -> «москве»."""
+    q = (text or "").lower()
+    # Длинные служебные фразы вырезаем первыми (аналог _extract_store_query)
+    for phrase in sorted(_WEATHER_SERVICE_PHRASES, key=len, reverse=True):
+        q = q.replace(phrase, " ")
+    # Обращения («офицер», «саша», «сэр»...) — после служебных фраз и до
+    # схлопывания пробелов: иначе они оседают в «городе» (см. логи 22.09).
+    q = _WEATHER_VOCATIVE_RE.sub(" ", q)
+    q = _WEATHER_CITY_RE.sub(" ", q).strip(" -.,!?")
+    return q or None
+
+
+def _handle_weather_command(text: str) -> dict[str, Any] | None:
+    """Погода (ТЗ websearch_weather §2.1 MVP + §2.2 богатая версия).
+
+    С городом: реальная температура голосом через Open-Meteo
+    (src/modules/weather.py). Без города — переспрос «В каком городе, сэр?»
+    (ТЗ §2.2: не геолоцировать по IP ради одной фичи).
+
+    Тихий фолбэк (ТЗ §2.2): нет сети / город не найден / API недоступен —
+    открываем браузер с Google-виджетом, а не показываем голую ошибку.
+
+    Триггер — строгий вопросный паттерн (_WEATHER_QUESTION_RE): слово
+    «погода» в обычной речи («анекдот про погоду») НЕ перехватывается.
+
+    Возвращает None, если фраза не про погоду.
+    """
+    low = (text or "").lower()
+    if not _WEATHER_QUESTION_RE.search(low):
+        return None
+
+    city = _extract_weather_city(text)
+    if not city:
+        # Погодный вопрос без города: явно переспрашиваем (ТЗ §2.2),
+        # пользователь ответит «погода в Москве» следующим ходом.
+        return {
+            "success": True,
+            "message": "В каком городе узнать погоду, сэр?",
+            "action": "weather",
+        }
+
+    # --- Богатая версия: реальная температура через Open-Meteo ---
+    try:
+        from modules import weather
+        result = weather.get_current_weather(city)
+    except Exception:  # noqa: BLE001 — сеть/импорт: фолбэк ниже
+        result = {"success": False}
+    if result.get("success"):
+        return {
+            "success": True,
+            "message": str(result.get("message", "")),
+            "action": "weather",
+            "city": city,
+            "voice": True,  # погода произнесена голосом, браузер не открывался
+        }
+
+    # --- Тихий фолбэк на MVP (ТЗ §2.2): браузер с Google-виджетом ---
+    import webbrowser
+    from urllib.parse import quote
+
+    q = f"погода {city}".strip()
+    url = f"https://www.google.com/search?q={quote(q)}"
+    threading.Thread(target=webbrowser.open, args=(url,), daemon=True,
+                     name="zeus-weather-fallback").start()
+    return {
+        "success": True,
+        "message": f"Онлайн-погода недоступна, сэр. Открываю браузер: погода в «{city}».",
+        "action": "weather",
+        "city": city,
+        "url": url,
+        "fallback": True,
+    }
 
 
 def _sounds_like_taobao(word: str) -> bool:
@@ -1140,6 +1340,19 @@ def execute_command(text: str) -> dict[str, Any] | None:
     taobao_result = _handle_taobao_command(text)
     if taobao_result is not None:
         return taobao_result
+
+    # --- Веб-поиск «погугли/поищи в интернете» (ТЗ websearch_weather §1) ---
+    # До steam: «погугли сколько стоит X» без «стим» не должен уйти в магазин;
+    # до блока «найди»: «найди в интернете X» перехватывается раньше локального поиска.
+    websearch_result = _handle_websearch_command(text)
+    if websearch_result is not None:
+        return websearch_result
+
+    # --- Погода MVP «погода в X» (ТЗ websearch_weather §2.1) ---
+    # После taobao («погода» не содержит «тао» — нет пересечения), до steam/«найди».
+    weather_result = _handle_weather_command(text)
+    if weather_result is not None:
+        return weather_result
 
     # --- Гибридный Steam: веб-магазин (поиск/цены/корзина) ---
     steam_result = _handle_steam_store_command(text)
@@ -1977,13 +2190,19 @@ def _handle_drive_scan_response(text: str) -> dict[str, Any] | None:
         return None
 
     text_lower = text.lower()
-    positive = any(w in text_lower for w in ["да", "сканируй", "скан", "yes", "scan", "просканируй", "ищи", "ищи там"])
-    negative = any(w in text_lower for w in ["нет", "не надо", "отмен", "no", "не нужно", "пропусти"])
+    positive = bool(re.search(
+        r"(?<!\w)(?:да|yes|scan|скан|ищи)(?!\w)|просканируй|сканируй",
+        text_lower,
+    ))
+    negative = bool(re.search(
+        r"(?<!\w)(?:нет|no)(?!\w)|не\s+надо|не\s+нужно|отмен|пропусти",
+        text_lower,
+    ))
 
-    if positive:
-        return confirm_drive_scan()
     if negative:
         return cancel_drive_scan()
+    if positive:
+        return confirm_drive_scan()
 
     # Непонятный ответ — оставляем ожидание
     return {

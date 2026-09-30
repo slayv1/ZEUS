@@ -97,6 +97,13 @@ def make_ui() -> "mf.ZeusUI":
     ui._watcher_started = False
     ui._exit_requested = False
     ui._holo_running = True
+    # Атрибуты Спринта 1 (аудио-подменю трея и мост [AUDIO]-логов):
+    # _start_tray передаёт on_pick_* в TrayManager и читает self.controller;
+    # без них заглушка падала в except и трей оставался None.
+    ui.controller = None
+    ui._on_tray_pick_input = lambda device_id: None
+    ui._on_tray_pick_output = lambda device_id: None
+    ui._core_log_unsubscribe = None
     # UI-задачи выполняем синхронно, чтобы проверять эффект сразу
     ui._post_ui = lambda fn: fn()
     ui._log = lambda *a, **k: None
@@ -317,6 +324,7 @@ def test_assemble_ui_starts_tray_in_chain(monkeypatch):
         "_setup_controller",
         "_init_file_watcher",
         "_start_tray",
+        "_subscribe_core_logs",  # мост [AUDIO]-логов (Спринт 1)
     ):
         monkeypatch.setattr(ui, name, lambda n=name: calls.append(n), raising=False)
     removed = []
@@ -326,6 +334,7 @@ def test_assemble_ui_starts_tray_in_chain(monkeypatch):
     ui._assemble_ui()
     assert "_start_tray" in calls
     assert calls.index("_start_tray") > calls.index("_init_file_watcher")
+    assert "_subscribe_core_logs" in calls
     assert removed == [], "хоткей и старт-в-трее должны быть отключены"
 
 
@@ -560,3 +569,134 @@ def test_close_window_helper_handles_sync_close_api(monkeypatch):
 
 
 
+
+
+# ----------------------------------------------------------------------
+# Спринт 1 (v1.4): выбор устройства в меню трея → контроллер
+# ----------------------------------------------------------------------
+class FakeAudioTray:
+    """Трей, сохраняющий последние переданные устройства (проверка «галочек»)."""
+
+    def __init__(self):
+        self.started = False
+        self.stopped = False
+        self.audio_updates: list = []
+
+    def start(self):
+        self.started = True
+        return True
+
+    def stop(self):
+        self.stopped = True
+
+    def update_audio_devices(self, devices_in, devices_out, active_in, active_out):
+        self.audio_updates.append(
+            (devices_in, devices_out, active_in, active_out)
+        )
+
+
+class FakeAudioController:
+    """Контроллер-заглушка для проверок трей ↔ контроллер."""
+
+    def __init__(self):
+        self.inputs = [{"id": "m1", "name": "Мик 1"}, {"id": "m2", "name": "Мик 2"}]
+        self.outputs = [{"id": "s1", "name": "Динамик"}]
+        self.settings = {"voice_settings": {
+            "input_device_id": "m1", "output_device_id": None}}
+        self.input_calls: list = []
+        self.output_calls: list = []
+        self.on_tray_audio_update = None
+
+    def get_available_input_devices(self):
+        return self.inputs
+
+    def get_available_output_devices(self):
+        return self.outputs
+
+    def set_input_device(self, device_id):
+        self.input_calls.append(device_id)
+        self.settings["voice_settings"]["input_device_id"] = device_id
+
+    def set_output_device(self, device_id):
+        self.output_calls.append(device_id)
+        self.settings["voice_settings"]["output_device_id"] = device_id
+
+    def stop_device_watcher(self):
+        pass
+
+
+def _ui_with_audio_tray() -> "mf.ZeusUI":
+    ui = make_ui()
+    ui._tray = FakeAudioTray()
+    ui.controller = FakeAudioController()
+    return ui
+
+
+class TestTrayToController:
+    def test_pick_input_delegates_and_marks_active_in_menu(self):
+        ui = _ui_with_audio_tray()
+        mf.ZeusUI._on_tray_pick_input(ui, "m2")
+        assert ui.controller.input_calls == ["m2"]
+        # «галочка» в подменю: активный ввод передан в трей
+        assert ui._tray.audio_updates[-1][2] == "m2"
+
+    def test_pick_output_delegates_and_marks_active_in_menu(self):
+        ui = _ui_with_audio_tray()
+        mf.ZeusUI._on_tray_pick_output(ui, "s1")
+        assert ui.controller.output_calls == ["s1"]
+        assert ui._tray.audio_updates[-1][3] == "s1"
+
+    def test_pick_auto_option_passes_none(self):
+        ui = _ui_with_audio_tray()
+        mf.ZeusUI._on_tray_pick_input(ui, None)   # пункт «Авто (системный)»
+        assert ui.controller.input_calls == [None]
+        assert ui._tray.audio_updates[-1][2] is None
+
+    def test_pick_without_controller_is_safe(self):
+        ui = make_ui()
+        ui._tray = FakeAudioTray()
+        ui.controller = None
+        mf.ZeusUI._on_tray_pick_input(ui, "m1")
+        mf.ZeusUI._on_tray_pick_output(ui, "s1")
+        assert ui._tray.audio_updates == []   # падений нет, трей не тронут
+
+    def test_start_tray_wires_callbacks_and_fills_devices(self, monkeypatch):
+        """Регрессия: _start_tray читал self._controller (AttributeError),
+        из-за чего иконка создавалась, но ссылка терялась, а подменю
+        оставалось пустым."""
+        ui = make_ui()
+        ui.controller = FakeAudioController()
+        kwargs: dict = {}
+
+        def fake_tr_manager(**kw):
+            kwargs.update(kw)
+            return FakeAudioTray()
+
+        monkeypatch.setattr(mf, "TrayManager", fake_tr_manager)
+        monkeypatch.setattr(
+            mf, "config", types.SimpleNamespace(resource_path=lambda p: p)
+        )
+
+        mf.ZeusUI._start_tray(ui)
+
+        assert ui._tray is not None and ui._tray.started is True
+        # колбэки выбора устройств переданы в меню
+        assert callable(kwargs.get("on_pick_input"))
+        assert callable(kwargs.get("on_pick_output"))
+        # hot-plug: контроллер уведомляет трей об изменениях
+        assert callable(ui.controller.on_tray_audio_update)
+        # при старте подменю заполнено и активный микрофон отмечен
+        assert ui._tray.audio_updates[-1][2] == "m1"
+
+        ui.controller.on_tray_audio_update()   # hot-plug из потока watcher
+        assert len(ui._tray.audio_updates) == 2
+
+    def test_refresh_tray_survives_controller_errors(self):
+        ui = _ui_with_audio_tray()
+
+        def boom():
+            raise RuntimeError("устройства недоступны")
+
+        ui.controller.get_available_input_devices = boom
+        ui._refresh_tray_audio_devices()   # не должно бросить наружу
+        assert ui._tray.audio_updates == []

@@ -56,28 +56,44 @@ class ProjectFileHandler(FileSystemEventHandler):
         self.callback = callback
         self.patterns: list[str] = list(patterns) if patterns else _default_patterns()
 
-    def _matches(self, path: str | None) -> bool:
-        """Проверяет, соответствует ли путь хотя бы одному паттерну."""
+    def _matches(self, path: str | None, is_directory: bool | None = None) -> bool:
+        """Проверяет, соответствует ли путь хотя бы одному паттерну.
+
+        Для директорий паттерны не применяются. ВАЖНО: флаг берём из
+        события watchdog (event.is_directory), а не через os.path.isdir(path):
+        для удалённого файла/папки путь уже не существует, и папка
+        ошибочно «просеивалась» бы через паттерны имён.
+        """
         import fnmatch
         if not path:
             return True
         # Название папки — всегда отслеживаем (события moved по директориям)
-        if os.path.isdir(path):
+        if is_directory is None:
+            is_directory = os.path.isdir(path)
+        if is_directory:
             return True
         filename = os.path.basename(path)
         return any(fnmatch.fnmatch(filename, pat) for pat in self.patterns)
 
     def _emit(self, event_type: str, src_path: str,
-              dest_path: str | None = None) -> None:
+              dest_path: str | None = None,
+              is_directory: bool | None = None) -> None:
         """Формирует описание события и передаёт колбэку."""
-        if not self._matches(src_path):
+        if is_directory is None:
+            is_directory = bool(
+                os.path.isdir(src_path)
+                or (dest_path and os.path.isdir(dest_path))
+            )
+        if not self._matches(src_path, is_directory=is_directory):
             return
         desc = {
             "event": event_type,          # created | modified | deleted | moved
             "path": src_path,
             "src_path": src_path,
             "dest_path": dest_path,
-            "is_directory": os.path.isdir(src_path) or (dest_path and os.path.isdir(dest_path)),
+            # Флаг события, а не пересчёт по диску: для deleted-событий
+            # os.path.isdir(src_path) уже False (папка удалена).
+            "is_directory": is_directory,
             "timestamp": time.time(),
         }
         try:
@@ -86,16 +102,19 @@ class ProjectFileHandler(FileSystemEventHandler):
             pass  # Колбэк не должен ломать мониторинг
 
     def on_created(self, event) -> None:  # noqa: N802 (сигнатура watchdog)
-        self._emit("created", event.src_path)
+        self._emit("created", event.src_path, is_directory=event.is_directory)
 
     def on_modified(self, event) -> None:  # noqa: N802
-        self._emit("modified", event.src_path)
+        self._emit("modified", event.src_path, is_directory=event.is_directory)
 
     def on_deleted(self, event) -> None:  # noqa: N802
-        self._emit("deleted", event.src_path)
+        # Флаг обязателен: путь уже удалён, os.path.isdir вернёт False
+        # и папка-жертва была бы отброшена фильтром паттернов.
+        self._emit("deleted", event.src_path, is_directory=event.is_directory)
 
     def on_moved(self, event) -> None:  # noqa: N802
-        self._emit("moved", event.src_path, event.dest_path)
+        self._emit("moved", event.src_path, event.dest_path,
+                   is_directory=event.is_directory)
 class FileWatcher:
     """Фоновый наблюдатель за папками проекта Зевса.
 
@@ -113,6 +132,7 @@ class FileWatcher:
                  recursive: bool = True,
                  log_size: int = 100) -> None:
         self.observer = Observer()
+        self._observer_used = False
         self.patterns = patterns or _default_patterns()
         self.recursive = recursive
         self._handler: ProjectFileHandler | None = None
@@ -204,6 +224,11 @@ class FileWatcher:
         if self.observer.is_alive():
             return True  # Уже работает, сэр.
 
+        # watchdog Observer нельзя запустить повторно после stop()/join():
+        # его внутренний поток уже был использован.
+        if self._observer_used:
+            self.observer = Observer()
+
         if paths is not None:
             self._paths = [_norm_path(p) for p in paths]
 
@@ -216,6 +241,7 @@ class FileWatcher:
 
         started = False
         try:
+            self._observer_used = True
             for path in observer_paths:
                 self.observer.schedule(
                     self._handler, path, recursive=self.recursive
@@ -264,7 +290,13 @@ class FileWatcher:
                 self._schedule_debounced_reload(reloader)
 
     def recent_events(self, limit: int = 20) -> list[dict[str, Any]]:
-        """Возвращает последние зафиксированные события (для UI/отладки)."""
+        """Возвращает последние зафиксированные события (для UI/отладки).
+
+        limit <= 0 возвращает пустой список: раньше `self._log[-0:]`
+        отдавал ВЕСЬ лог, что не соответствовало ожиданию «ничего».
+        """
+        if limit <= 0:
+            return []
         return list(self._log[-limit:])
 
 

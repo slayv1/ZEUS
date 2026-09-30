@@ -54,6 +54,27 @@ def _ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _out(text: str, file: Any = None) -> None:
+    """Печатает текст, устойчиво к неполной кодировке stdout.
+
+    При перенаправлении вывода в файл/пайп на Windows stdout кодируется
+    в cp1251, и эмодзи роняли скрипт с UnicodeEncodeError (та же проблема,
+    что была у taobao_core до _safe_print). Нечекорректные символы
+    заменяются '?', но наблюдение продолжает работать.
+    """
+    if file is None:
+        file = sys.stdout
+    try:
+        print(text, file=file, flush=True)
+    except UnicodeEncodeError:
+        enc = getattr(file, "encoding", None) or "utf-8"
+        safe = text.encode(enc, errors="replace").decode(enc, errors="replace")
+        try:
+            print(safe, file=file, flush=True)
+        except Exception:  # noqa: BLE001 — вывод не должен ронять мониторинг
+            pass
+
+
 def _paint(event_type: str, text: str) -> str:
     """Окрашивает текст в цвет события, если цвет включён."""
     if COLOR_ENABLED:
@@ -68,38 +89,47 @@ class PrintHandler(FileSystemEventHandler):
         super().__init__()
         self.patterns = patterns  # пустой список = слушать все файлы
 
-    def _matches(self, path: str | None) -> bool:
-        """Проверяет соответствие пути паттернам (папки слушаем всегда)."""
+    def _matches(self, path: str | None, is_directory: bool | None = None) -> bool:
+        """Проверяет соответствие пути паттернам (папки слушаем всегда).
+
+        Флаг директории берётся из события watchdog: для удалённых папок
+        os.path.isdir(path) уже False (путь не существует), и папка
+        ошибочно просеивалась бы через паттерны имён файлов.
+        """
         if not path:
             return True
-        if os.path.isdir(path):
+        if is_directory is None:
+            is_directory = os.path.isdir(path)
+        if is_directory:
             return True
         if not self.patterns:
             return True
         name = os.path.basename(path)
         return any(fnmatch.fnmatch(name, pat) for pat in self.patterns)
 
-    def _show(self, event_type: str, path: str, dest: str | None = None) -> None:
-        if not self._matches(path):
+    def _show(self, event_type: str, path: str, dest: str | None = None,
+              is_directory: bool | None = None) -> None:
+        if not self._matches(path, is_directory=is_directory):
             return
         icon, label = _EVENT_LABELS.get(event_type, ("", event_type))
         line = f"[{_ts()}] {icon} {label}: {path}"
         if dest:
             line += f" -> {dest}"
-        print(_paint(event_type, line), flush=True)
+        _out(_paint(event_type, line))
 
     # Интеграция с watchdog
     def on_created(self, event: Any) -> None:
-        self._show("created", event.src_path)
+        self._show("created", event.src_path, is_directory=event.is_directory)
 
     def on_modified(self, event: Any) -> None:
-        self._show("modified", event.src_path)
+        self._show("modified", event.src_path, is_directory=event.is_directory)
 
     def on_deleted(self, event: Any) -> None:
-        self._show("deleted", event.src_path)
+        self._show("deleted", event.src_path, is_directory=event.is_directory)
 
     def on_moved(self, event: Any) -> None:
-        self._show("moved", event.src_path, event.dest_path)
+        self._show("moved", event.src_path, event.dest_path,
+                   is_directory=event.is_directory)
 
 
 def _parse_patterns(raw: str | None) -> list[str]:
@@ -113,7 +143,7 @@ def resolve_path(raw: str) -> str:
     """Возвращает абсолютный нормализованный путь или выводит ошибку и выходит."""
     path = os.path.abspath(raw)
     if not os.path.exists(path):
-        print(f"Ошибка: путь не существует — {path}", file=sys.stderr)
+        _out(f"Ошибка: путь не существует — {path}", file=sys.stderr)
         raise SystemExit(2)
     return path
 
@@ -158,13 +188,12 @@ def main() -> int:
     observer.schedule(handler, path, recursive=args.recursive)
     observer.start()
 
-    print(
+    _out(
         _paint("modified", "👁 Наблюдаю за:") +
         f" {path}\n" +
         f"   Паттерны: {', '.join(patterns) if patterns else 'все файлы'}\n" +
         f"   Рекурсивно: {'да' if args.recursive else 'нет'}\n" +
         "   Для остановки нажмите Ctrl+C.",
-        flush=True,
     )
 
     try:
@@ -176,7 +205,7 @@ def main() -> int:
         observer.stop()
         observer.join(timeout=3.0)
 
-    print("\nНаблюдение остановлено.", flush=True)
+    _out("\nНаблюдение остановлено.")
     return 0
 
 

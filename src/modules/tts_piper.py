@@ -219,11 +219,70 @@ def prewarm(model_path: str | None = None) -> bool:
     return _load_voice(model_path) is not None
 
 
+def _open_output_stream(rate: int, channels: int, device):
+    """Открывает OutputStream, устойчиво к запиранию частоты (PaErrorCode -9997).
+
+    BT-гарнитуры в режиме гарнитуры (HFP, активный mic) могут принимать на
+    выходе только телефонные частоты — попытка 22050 падает с
+    'Invalid sample rate'. Фолбэк-цепочка:
+      1) запрошенная частота модели на выбранном устройстве;
+      2) дефолтная частота устройства (ресемплинг чанков);
+      3) дефолтное устройство системы (ресемплинг чанков).
+    Возвращает (stream, фактическая_частота) или (None, None).
+    """
+    import sounddevice as sd
+
+    attempts: list[tuple[int, int, object]] = [(rate, channels, device)]
+    try:  # дефолтная частота выбранного устройства
+        dev_info = sd.query_devices(device=device if device is not None else None)
+        dev_rate = int(float(dev_info["default_samplerate"]))
+        if dev_rate != rate:
+            attempts.append((dev_rate, channels, device))
+    except Exception:  # noqa: BLE001
+        pass
+    attempts.append((rate, channels, None))          # системный дефолт, та же частота
+    try:
+        sys_dev = sd.query_devices(kind="output")
+        sys_rate = int(float(sys_dev["default_samplerate"]))
+        if (sys_rate, None) not in ((r, d) for r, _c, d in attempts):
+            attempts.append((sys_rate, channels, None))
+    except Exception:  # noqa: BLE001
+        pass
+
+    last_error: Exception | None = None
+    for try_rate, try_channels, try_device in attempts:
+        try:
+            stream = sd.OutputStream(
+                samplerate=try_rate, channels=try_channels, dtype="int16",
+                blocksize=4096, device=try_device,
+            )
+            stream.start()
+            return stream, try_rate
+        except Exception as exc:  # noqa: BLE001 — пробуем следующий вариант
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    return None, None  # pragma: no cover — attempts никогда не пуст
+
+
+def _resample_int16(audio: np.ndarray, src: int, dst: int) -> np.ndarray:
+    """Линейный ресемплинг int16-PCM (np.interp) без сторонних зависимостей."""
+    import numpy as np
+
+    if src == dst or audio.size == 0:
+        return audio
+    n_out = max(1, int(round(audio.size * dst / src)))
+    x_in = np.arange(audio.size, dtype=np.float64)
+    x_out = np.linspace(0.0, audio.size - 1.0, n_out)
+    return np.interp(x_out, x_in, audio.astype(np.float64)).astype(np.int16)
+
+
 def speak_piper(
     text: str,
     model_path: str | None = None,
     length_scale: float | None = None,
     noise_scale: float | None = None,
+    device: int | None = None,
 ) -> bool:
     """Озвучивает текст потоково через Piper.
 
@@ -284,6 +343,7 @@ def speak_piper(
         return False
 
     stream = None
+    stream_rate = 22050  # дефолт до первого чанка (фактическая — из чанка)
     try:
         for sent in sentences:
             if not sent.strip() or _stop_generation != start_generation:
@@ -298,10 +358,15 @@ def speak_piper(
                 if audio is None:
                     audio = (getattr(chunk, "audio_float_array") * 32767).astype(np.int16)
                 if stream is None:
-                    stream = sd.OutputStream(
-                        samplerate=rate, channels=channels, dtype="int16", blocksize=4096
-                    )
-                    stream.start()
+                    # ТЗ v1.4 §2.5: прямой вывод в выбранное устройство
+                    # (device=None → системный дефолт). Устойчиво к запиранию
+                    # частоты BT-гарнитурой (PaErrorCode -9997): фолбэк на
+                    # дефолтную частоту устройства/системы + ресемплинг.
+                    stream, stream_rate = _open_output_stream(rate, channels, device)
+                    if stream is None:
+                        return False
+                if stream_rate != rate:
+                    audio = _resample_int16(audio, rate, stream_rate)
                 stream.write(np.ascontiguousarray(audio))
         return True
     except Exception as e:  # noqa: BLE001 (фолбэк на pyttsx3)

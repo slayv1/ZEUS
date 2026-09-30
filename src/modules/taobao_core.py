@@ -16,18 +16,49 @@ daemon-потоке, чтобы UI Flet не блокировался и не п
 
 from __future__ import annotations
 
+import re
+import sys
 import threading
 import urllib.parse
 import webbrowser
 
-from modules.taobao_translator import translate_to_chinese
+from modules.taobao_translator import translate_to_chinese, _looks_like_error
+
+
+def _safe_print(text: str) -> None:
+    """print, устойчивый к консоли с не-UTF-8 кодировкой (cp1251/cp866).
+
+    Варианты запуска с перенаправленным stdout (логи, noconsole-обёртки)
+    могут иметь кодировку, в которой кириллица/китайский не кодируются:
+    обычный print кидал UnicodeEncodeError и убивал фоновый поток taobao
+    ДО открытия браузера. Некодируемые символы заменяются, а не роняют поток.
+    """
+    stream = sys.stdout
+    enc = getattr(stream, "encoding", None) or "utf-8"
+    try:
+        text.encode(enc)
+        stream.write(text + "\n")
+    except (UnicodeEncodeError, LookupError):
+        stream.write(text.encode(enc, errors="replace").decode(enc, errors="replace") + "\n")
+    except Exception:  # noqa: BLE001 — диагностика не должна ронять поток
+        return
+    try:
+        stream.flush()
+    except Exception:  # noqa: BLE001
+        pass
 
 # Базовый URL поисковой выдачи Taobao.
-TAOBAO_SEARCH_URL = "https://s.taobao.com/search?q={encoded}"
+# КРИТИЧНО: s.taobao.com отдаёт Error 500 из-за рубежа (не пускает без
+# китайского IP/капчи). world.taobao.com — международная витрина, работает
+# из России без VPN и понимает и те же q= запросы.
+TAOBAO_SEARCH_URL = "https://world.taobao.com/search/search.htm?q={encoded}"
 
 # Служебные фразы, которые нужно вырезать из голосовой команды.
 # Порядок важен: сначала длинные словосочетания (в т.ч. искажённые распознавателем
 # варианты «на таобао» -> «натал бал», «на таю балу»), затем одиночные слова.
+#
+# ВАЖНО: это НЕ подстроки, а отдельные слова — совпадения ищутся по границам
+# слов (re), чтобы «купить носки» не превращалось в «купить ски».
 _SERVICE_PHRASES = (
     "зеве", "зевс", "пожалуйста", "да сэр", "сэр",
     "на таобао", "с таобао", "на тао",
@@ -35,6 +66,10 @@ _SERVICE_PHRASES = (
     "найдется", "таобао", "тао", "таю", "тау", "бао", "балу",
     "найди мне", "найди", "поищи", "поиск", "покажи", "найда", "ищи",
     "товар", "товары", "товар на", "купить", "купи", "цена", "найду себе",
+)
+
+_SERVICE_RE = re.compile(
+    "|".join(sorted((re.escape(p) for p in _SERVICE_PHRASES), key=len, reverse=True)),
 )
 
 # Последний обработанный запрос (диагностика/тесты).
@@ -45,14 +80,16 @@ def clean_query(query: str) -> str:
     """Очищает запрос от служебных фраз и лишних пробелов.
 
     Пример: «найди пуховик на таобао» -> «пуховик».
+
+    Совпадения ищутся по границам слов (пробел/начало/конец/пунктуация),
+    а не подстрокой — иначе «тао» выедало бы кусок слова «готов»,
+    а «бао» — слово «носки» («купить носки» -> «купить ски»).
     """
-    q = (query or "").strip().lower()
-    for phrase in _SERVICE_PHRASES:
-        q = q.replace(phrase, " ")
+    q = f" {(query or '').strip().lower()} "
+    q = _SERVICE_RE.sub(" ", q)
     # Схлопываем повторяющиеся пробелы и убираем краевые знаки препинания.
     parts = q.split()
-    q = " ".join(parts).strip(" -.,!?")
-    return q
+    return " ".join(parts).strip(" -.,!?")
 
 
 def search_taobao_smart(query: str) -> None:
@@ -71,15 +108,22 @@ def _do_search(query: str) -> None:
     """Синхронное ядро поиска: очистка -> перевод -> кодирование -> браузер."""
     cleaned = clean_query(query)
     if not cleaned:
-        print("[Taobao] Ошибка: Пустой запрос после очистки")
+        _safe_print("[Taobao] Ошибка: Пустой запрос после очистки")
         return
 
     # Перевод на китайский: поиск Taobao по кириллице даёт пустую выдачу.
     translated = translate_to_chinese(cleaned)
+    # Гигиена: никогда не подставляем в URL текст, похожий на ошибку сервиса
+    # (см. скрин: в q= попал "Error...1500...try again later"). Если перевод
+    # подозрительный — используем очищенный оригинал вместо него.
     if translated != cleaned:
-        print(f"[Taobao] Перевод: '{cleaned}' -> '{translated}'")
+        if _looks_like_error(translated):
+            _safe_print(f"[Taobao] Подозрительный перевод, использую оригинал: '{cleaned}'")
+            translated = cleaned
+        else:
+            _safe_print(f"[Taobao] Перевод: '{cleaned}' -> '{translated}'")
 
-    encoded = urllib.parse.quote(translated)
+    encoded = urllib.parse.quote(translated, safe="")
     url = TAOBAO_SEARCH_URL.format(encoded=encoded)
     _last_query["query"] = cleaned
     _last_query["translated"] = translated
@@ -87,9 +131,9 @@ def _do_search(query: str) -> None:
 
     try:
         webbrowser.open(url)
-        print(f"[Taobao] Запрос отправлен: '{cleaned}' -> {url}")
+        _safe_print(f"[Taobao] Запрос отправлен: '{cleaned}' -> {url}")
     except Exception as exc:  # noqa: BLE001
-        print(f"[Taobao] Ошибка открытия браузера: {exc}")
+        _safe_print(f"[Taobao] Ошибка открытия браузера: {exc}")
 
 
 async def search_taobao_async(query: str) -> None:

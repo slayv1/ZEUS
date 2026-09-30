@@ -205,6 +205,7 @@ class IndexWatcher:
         self.editor = IndexEditor()
         self._handler = IndexUpdateHandler(self.editor)
         self.observer = Observer()
+        self._observer_used = False
         self._watching = False
 
     @property
@@ -218,8 +219,18 @@ class IndexWatcher:
             результат rebuild_index от file_scanner.
         """
         result = self.scanner.rebuild_index(max_workers)
-        # Перечитываем индекс: скан мог изменить его с момента загрузки редактора
-        self.editor.reload()
+        # Скан идёт в фоне — перечитываем индекс ПОСЛЕ его завершения.
+        # Раньше reload() выполнялся сразу после старта потока: редактор
+        # держал копию «до скана», и первая же отложенная запись по событию
+        # watchdog затирала свежий index.json устаревшими данными (потеря
+        # результатов полного скана).
+        def _reload_after_scan() -> None:
+            while self.scanner.is_indexing():
+                time.sleep(0.2)
+            self.editor.reload()
+
+        threading.Thread(target=_reload_after_scan, daemon=True,
+                         name="zeus-index-reload").start()
         if watch:
             self.start_watching()
         return result
@@ -230,8 +241,14 @@ class IndexWatcher:
             return True
         if not self.search_paths:
             return False
+        # watchdog Observer нельзя запустить повторно после stop()/join():
+        # его внутренний поток уже использован — берём новый экземпляр
+        # (аналогичный guard есть в file_watcher).
+        if self._observer_used:
+            self.observer = Observer()
         started = False
         try:
+            self._observer_used = True
             for path in self.search_paths:
                 if os.path.exists(path):
                     self.observer.schedule(self._handler, path, recursive=True)

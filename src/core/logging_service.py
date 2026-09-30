@@ -17,6 +17,7 @@ import logging
 import os
 import threading
 from logging.handlers import RotatingFileHandler
+from typing import Callable
 
 from core.config import data_path
 
@@ -34,6 +35,47 @@ _ACTIVE_LEVEL = logging.INFO
 # каждая запись тогда попадала бы в файл дважды.
 _pool_lock = threading.Lock()
 _loggers: dict[str, logging.Logger] = {}
+
+# Подписчики на записи лога (Спринт 1 v1.4): UI-терминал показывает
+# [AUDIO]-диагностику модулей, которая пишется только в файл. Колбэк
+# получает (message, level); исключения подписчика изолированы и не
+# должны ломать запись в файл.
+_subscribers_lock = threading.Lock()
+_subscribers: list[Callable[[str, int], None]] = []
+
+
+def subscribe(callback: Callable[[str, int], None]) -> Callable[[], None]:
+    """Регистрирует колбэк(message, level) и возвращает функцию отписки.
+
+    Использование:
+        unsubscribe = subscribe(my_cb)
+        ...
+        unsubscribe()
+    """
+    if not callable(callback):
+        return lambda: None
+    with _subscribers_lock:
+        _subscribers.append(callback)
+
+    def _unsubscribe() -> None:
+        with _subscribers_lock:
+            try:
+                _subscribers.remove(callback)
+            except ValueError:
+                pass  # уже отписан — идемпотентно
+
+    return _unsubscribe
+
+
+def _notify_subscribers(message: str, level: int) -> None:
+    """Раздаёт запись подписчикам; сбой одного не влияет на остальных."""
+    with _subscribers_lock:
+        subscribers = list(_subscribers)
+    for callback in subscribers:
+        try:
+            callback(message, level)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def _default_path() -> str:
@@ -94,11 +136,17 @@ def set_level(level: int) -> None:
 
 
 def log(message: str, level: int = logging.INFO) -> None:
-    """Пишет сообщение в zeus.log, не выбрасывая исключений наружу."""
+    """Пишет сообщение в zeus.log, не выбрасывая исключений наружу.
+
+    После записи в файл запись раздаётся подписчикам (subscribe) —
+    так [AUDIO]-диагностика модулей попадает в терминал интерфейса.
+    """
+    text = str(message)
     try:
-        get_logger().log(level, str(message))
+        get_logger().log(level, text)
     except Exception:
         pass
+    _notify_subscribers(text, int(level))
 
 
 def debug(message: str) -> None:

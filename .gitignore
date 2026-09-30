@@ -35,25 +35,29 @@ release/
 # --- Кэш тестов ---
 .pytest_cache/
 
-# --- AL (Dynamics 365 Business Central) ---
-#launch.json folder
-.vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+# --- Модели ---
+# Vosk скачивается автоматически при первом запуске (см. wake_word.py) —
+# не должен лежать в репозитории (~88 МБ).
+models/vosk-model-small-ru-0.22/
+# ВНИМАНИЕ: models/tts/ (Piper, ~61 МБ) НЕ игнорируется — в отличие от Vosk,
+# для него в коде нет авто-скачивания (tts_piper.py), так что при чистом
+# чекауте без этой папки синтез речи не заработает. Если решите не хранить
+# её в git — сначала добавьте для неё такую же логику загрузки, как у Vosk,
+# либо подключите Git LFS.
+
+# --- Пользовательские данные (создаются приложением на каждой машине) ---
+# Индекс файлов, кэш ответов, заметки и метаданные сканирования — это данные
+# конкретного пользователя, а не часть исходников (см. ZEUS_cleanup_TZ.md §4).
+data/index.json
+data/index_meta.json
+data/cache.json
+data/notes.txt
+data/file_cache.json
+
+# --- Отладочные дампы (перехваты stdout/stderr запусков и сборок) ---
+# Создаются временно при диагностике; в репозитории не нужны.
+/_*_out.txt
+/_*_err.txt
+/exe_*.log
+/pyi_log.txt
+/test_out.txt

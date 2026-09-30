@@ -178,6 +178,23 @@ class WakeWordDetector:
             print(f"[WakeWord] Ошибка загрузки модели: {e}")
             self.available = False
 
+    @staticmethod
+    def _safe_extract(zf: "zipfile.ZipFile", dest_dir: str) -> None:
+        """Извлекает архив, отклоняя записи с path traversal (Zip Slip).
+
+        Без этой проверки вредоносный/подменённый .zip мог бы содержать
+        записи вида "../../AppData/.../evil.dll" и записать файл ЗА ПРЕДЕЛАМИ
+        `dest_dir`. Источник URL захардкожен (alphacephei.com) и HTTPS, поэтому
+        риск сегодня низкий — но это дешёвая защита в глубину на случай
+        компрометации сервера/MITM с валидным сертификатом другого домена.
+        """
+        dest_root = os.path.realpath(dest_dir)
+        for member in zf.infolist():
+            member_path = os.path.realpath(os.path.join(dest_root, member.filename))
+            if not (member_path == dest_root or member_path.startswith(dest_root + os.sep)):
+                raise ValueError(f"Небезопасный путь в архиве модели: {member.filename!r}")
+        zf.extractall(dest_root)
+
     def _download_model(self):
         """Автоматически загружает маленькую русскую модель Vosk.
 
@@ -195,7 +212,7 @@ class WakeWordDetector:
             finally:
                 socket.setdefaulttimeout(old_timeout)
             with zipfile.ZipFile(zip_path, "r") as zf:
-                zf.extractall(_MODELS_DIR)
+                self._safe_extract(zf, _MODELS_DIR)
             try:
                 os.remove(zip_path)
             except OSError:

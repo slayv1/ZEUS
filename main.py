@@ -10,9 +10,17 @@ import os
 import sys
 
 # Добавляем папку src/ в sys.path, чтобы импортировать модули проекта
-_SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
-if _SRC_DIR not in sys.path:
-    sys.path.insert(0, _SRC_DIR)
+# (core, ui, modules) при запуске из исходников: python main.py.
+#
+# В frozen-сборке (PyInstaller) этого делать НЕЛЬЗЯ: путь <_MEIPASS>/src
+# заставляет frozen-finder искать "core.config" под именем "src.config"
+# внутри PYZ-архива, и exe падает на старте с
+# ImportError: cannot import name 'config' from 'core'.
+# Все модули уже упакованы в PYZ и импортируются по обычным именам.
+if not getattr(sys, "frozen", False):
+    _SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src")
+    if _SRC_DIR not in sys.path:
+        sys.path.insert(0, _SRC_DIR)
 
 import flet as ft
 from core import config

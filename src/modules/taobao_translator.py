@@ -10,6 +10,8 @@
   3) Оригинальный запрос (graceful degradation).
 """
 import logging
+import re
+import threading
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +32,6 @@ _LOCAL_DICT = {
     "худи": "连帽衫",
     "платье": "连衣裙",
     "юбка": "裙子",
-    "нос": "袜子",
     "носки": "袜子",
     "ремень": "腰带",
     "рюкзак": "双肩包",
@@ -62,7 +63,6 @@ _LOCAL_DICT = {
     "термос": "保温杯",
     "кружка": "马克杯",
     "бутылка": "水瓶",
-    "зонт": "雨伞",
     "игрушка": "玩具",
     "книга": "书",
     "ручка": "笔",
@@ -78,36 +78,73 @@ except ImportError:
 
 # Кэш переводчика: результат онлайн-перевода кешируется по запросу, чтобы
 # частые поиски одного и того же товара не обращались в сеть повторно.
+# ВАЖНО: кешируются только успешные переводы. Ответы, похожие на ошибку
+# ("Error 500 ..."), и сам текст ошибки НЕ кешируются — иначе отравленный
+# кэш заставит Taobao искать текст ошибки вместо товара (выдача по слову
+# "again" из фразы "try again later").
 _TRANSLATE_CACHE: dict[str, str] = {}
-_TRANSLATE_CACHE_LOCK = None
-try:
-    import threading as _th
-    _TRANSLATE_CACHE_LOCK = _th.Lock()
-except Exception:  # noqa: BLE001
-    pass
+_TRANSLATE_CACHE_LOCK = threading.Lock()
+_TRANSLATE_CACHE_MAX_SIZE = 1000
+
+# Эвристика «ответ похож на ошибку, а не на перевод».
+_ERROR_LIKE_RE = re.compile(
+    r"error\s*\d{3}|traceback|exception|<!doctype|<html|that['’]s an error",
+    re.IGNORECASE,
+)
+
+
+def _cache_get(key: str) -> str | None:
+    with _TRANSLATE_CACHE_LOCK:
+        return _TRANSLATE_CACHE.get(key)
+
+
+def _cache_put(key: str, value: str) -> None:
+    """Кладёт перевод в кэш с простым ограничением размера (FIFO-вытеснение)."""
+    with _TRANSLATE_CACHE_LOCK:
+        if key not in _TRANSLATE_CACHE and len(_TRANSLATE_CACHE) >= _TRANSLATE_CACHE_MAX_SIZE:
+            _TRANSLATE_CACHE.pop(next(iter(_TRANSLATE_CACHE)), None)
+        _TRANSLATE_CACHE[key] = value
 
 
 def clear_translation_cache() -> None:
     """Очищает кэш переводов (полезно в отладке/тестах)."""
-    _TRANSLATE_CACHE.clear()
+    with _TRANSLATE_CACHE_LOCK:
+        _TRANSLATE_CACHE.clear()
+
+
+def _looks_like_error(text: str) -> bool:
+    """Грубая проверка: «перевод» похож на текст ошибки/HTML, а не на товар."""
+    if not text:
+        return True
+    t = text.strip()
+    if len(t) > 200:
+        return True
+    if _ERROR_LIKE_RE.search(t):
+        return True
+    # Онлайн-переводчик иногда возвращает исходник с префиксом сервиса.
+    return False
 
 
 def translate_to_chinese(query: str) -> str:
-    """Переводит запрос на zh-CN: кэш -> словарь -> GoogleTranslator -> оригинал."""
+    """Переводит запрос на zh-CN: кэш -> словарь -> GoogleTranslator -> оригинал.
+
+    ВАЖНО: в кэш пишутся только успешные переводы. Ответы, похожие на ошибку,
+    и fallback-возврат оригинала НЕ кешируются (см. _TRANSLATE_CACHE выше).
+    """
     if not query:
         return ""
 
-    cleaned = query.strip().lower()
+    cleaned = query.strip().lower().replace("ё", "е")
 
     # 0) Локальный кэш (мгновенно, без сети) — ТЗ «кеширование переводчика»
-    hit = _TRANSLATE_CACHE.get(cleaned)
+    hit = _cache_get(cleaned)
     if hit is not None:
         return hit
 
     # 1) Офлайн-словарь (точное совпадение) — мгновенно
     if cleaned in _LOCAL_DICT:
         result = _LOCAL_DICT[cleaned]
-        _TRANSLATE_CACHE[cleaned] = result
+        _cache_put(cleaned, result)
         return result
 
     # Частичное совпадение: «тёплый пуховик» -> «тёплый 羽绒服»
@@ -121,7 +158,7 @@ def translate_to_chinese(query: str) -> str:
             parts.append(word)
     if matched:
         result = " ".join(parts)
-        _TRANSLATE_CACHE[cleaned] = result
+        _cache_put(cleaned, result)
         return result
 
     # 2) Онлайн-перевод через deep_translator
@@ -130,17 +167,21 @@ def translate_to_chinese(query: str) -> str:
             result = GoogleTranslator(source="auto", target="zh-CN").translate(
                 query.strip()
             )
-            if result:
-                _TRANSLATE_CACHE[cleaned] = result
+            if result and not _looks_like_error(result):
+                result = result.strip()
+                _cache_put(cleaned, result)
                 return result
+            log.warning("[Taobao] Подозрительный ответ переводчика, игнорирую: %r", result)
         except Exception as exc:  # noqa: BLE001 — сеть может быть недоступна
             log.warning("[Taobao] Ошибка онлайн-перевода: %s", exc)
 
-    # 3) Fallback — оригинал
-    _TRANSLATE_CACHE[cleaned] = query.strip()
+    # 3) Fallback — оригинал (НЕ кешируем: повторный вызов попробует онлайн снова)
     return query.strip()
 
 
 def get_last_translation() -> str | None:
-    """Возвращает последний перевод (для отладки)."""
-    return getattr(translate_to_chinese, "_last", None)
+    """Возвращает последний УСПЕШНЫЙ перевод (для отладки)."""
+    with _TRANSLATE_CACHE_LOCK:
+        if not _TRANSLATE_CACHE:
+            return None
+        return next(reversed(_TRANSLATE_CACHE.values()))

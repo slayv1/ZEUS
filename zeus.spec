@@ -36,11 +36,16 @@ a = Analysis(
     ["main.py"],
     pathex=[os.path.join(SPECPATH, "src")],
     binaries=flet_bins + vosk_bins,
-    datas=flet_datas + [
-        ("data", "data"),
-        ("models", "models"),
-        ("assets", "assets"),   # иконки + центральная анимация hologram.webp
-    ] + piper_datas,
+# ВНИМАНИЕ: models/ НЕ включаем в datas — из-за этого в сборке появлялась
+# вторая копия моделей в _internal/models (+147 МБ). И Vosk (wake_word:
+# app_base_dir()/models), и Piper (config.resource_path) ищут модели РЯДОМ
+# С .exe — туда их кладёт build_release.bat (robocopy models). Если собираете
+# вручную без бата — скопируйте models/ рядом с Zeus.exe, иначе Vosk скачает
+# модель (~88 МБ) при первом запуске, а Piper-голос будет недоступен.
+datas=flet_datas + [
+    ("data", "data"),
+    ("assets", "assets"),   # иконки + центральная анимация hologram.webp
+] + piper_datas,
     hiddenimports=flet_hidden + [
         "core.crash_handler",
         "core.command_router",

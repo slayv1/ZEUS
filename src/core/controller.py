@@ -13,6 +13,7 @@
 """
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import queue
 import subprocess
@@ -27,7 +28,12 @@ from modules import sfx
 from core.chat_engine import ChatEngine
 from core import config
 from core import actions
+from core import file_scanner
 from core.command_router import router
+# log() используется в аудио-диагностике (Спринт 1: [AUDIO]-строки в терминал).
+# Раньше модуль вызывал log() без импорта — NameError при переключении
+# устройств из трея (ошибка маскировалась собственным except метода).
+from core.logging_service import log
 
 
 def _register_default_commands() -> None:
@@ -51,12 +57,18 @@ def _register_default_commands() -> None:
 _register_default_commands()
 
 
+# Глобальный пул для безопасных фоновых вызовов без постоянного создания потоков
+_SAFE_CMD_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="zeus-cmd-safely"
+)
+
+
 def execute_command_safely(command_func, *args, **kwargs):
     """Универсальная обёртка: запускает любую задачу/системный вызов в фоне.
 
     Используется для обработчиков событий Flet (нажатия, горячие клавиши,
     коллбэки), чтобы главный поток интерфейса мгновенно завершал обработку
-    события и не показывал плашку «Working…». Daemon-поток не блокирует
+    события и не показывал плашку «Working…». Daemon-поток или пул не блокируют
     завершение приложения.
     """
     def worker():
@@ -67,7 +79,10 @@ def execute_command_safely(command_func, *args, **kwargs):
             print(f"[Error] Ошибка при выполнении команды: {exc}")
             traceback.print_exc()
 
-    threading.Thread(target=worker, daemon=True, name="zeus-cmd-safely").start()
+    try:
+        _SAFE_CMD_EXECUTOR.submit(worker)
+    except Exception:
+        threading.Thread(target=worker, daemon=True, name="zeus-cmd-safely").start()
 
 
 class ZeusController:
@@ -141,6 +156,12 @@ class ZeusController:
         # Отложенный повтор возврата в IDLE, когда сессия ещё «молодая».
         self._session_retry_timer: threading.Timer | None = None
 
+        # Пул рабочих потоков для вспомогательных асинхронных задач (вместо пложения потоков)
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=4, thread_name_prefix="zeus-worker"
+        )
+        self._is_cleaned_up = False
+
         # --- Фоновое исполнение команд (защита UI от зависаний) ---
         # Тяжёлая работа (загрузка/поиск commands.json, нечёткое
         # сопоставление, запуск внешних процессов, HTTP к Ollama)
@@ -178,11 +199,37 @@ class ZeusController:
         # при сохранении файла вызывается actions.reload_commands(). UI позже
         # подключает свой колбэк через start_watching(callback=...) — он
         # применяется даже при уже запущенном наблюдателе.
+        self._watcher = None
         try:
             from core.file_watcher import get_watcher
             watcher = get_watcher()
             watcher.register_reload("commands.json", actions.reload_commands)
             watcher.start()
+            self._watcher = watcher
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Наблюдатель горячего подключения аудиоустройств (hot-plug).
+        # Колбэки on_device_added / on_device_removed_with_info обновляют
+        # аудио-подменю системного трея без перезапуска.
+        # Ссылка on_tray_audio_update — назначается из main_flet после создания трея.
+        self.on_tray_audio_update: Callable[[], None] | None = None
+        # UI-колбэк hot-plug событий (payload-словари для main_flet, §3.1)
+        self._ui_device_event_cb: Callable[[dict[str, Any]], None] | None = None
+        self._device_watcher: "DeviceWatcher | None" = None
+        try:
+            from core import audio_devices as _ad
+            dw = _ad.get_global_watcher()
+            dw.on_device_added = lambda dev: self._on_audio_device_changed()
+            dw.on_device_removed = lambda dev_id: self._on_audio_device_changed()
+            dw.on_device_removed_with_info = lambda dev: self._on_audio_device_changed()
+            # Смена системного аудио-маршрута ОС (Спринт 1, диагностика):
+            # логируем причину в терминал и обновляем аудио-подменю трея.
+            dw.on_default_changed = (
+                lambda kind, dev_id: self._on_audio_default_changed(kind, dev_id)
+            )
+            dw.start()
+            self._device_watcher = dw
         except Exception:  # noqa: BLE001
             pass
 
@@ -256,6 +303,18 @@ class ZeusController:
         """Возвращает текущие настройки."""
         return self.settings
 
+    def rebuild_file_index(self) -> dict:
+        """Запускает переиндексацию файлов в фоне (для кнопки "Пересканировать
+        сейчас" в настройках). Не блокирует UI — сам rebuild_index() уже
+        асинхронный, здесь просто прокидываем вызов из UI-слоя в file_scanner.
+        """
+        return file_scanner.rebuild_system_index()
+
+    def get_file_index_stats(self) -> dict:
+        """Статистика индекса файлов для отображения в UI (сколько файлов,
+        когда сканировали в последний раз, идёт ли сканирование сейчас)."""
+        return file_scanner.get_scanner().get_index_stats()
+
     def update_settings(self, section: str, key: str, value: Any) -> bool:
         """Обновляет конкретную настройку и сохраняет в JSON.
 
@@ -267,44 +326,46 @@ class ZeusController:
         Returns:
             True при успешном сохранении
         """
-        if section in self.settings and key in self.settings[section]:
-            self.settings[section][key] = value
-            saved = self.settings_manager.set(section, key, value)
+        if section not in self.settings or not isinstance(self.settings[section], dict):
+            self.settings[section] = {}
 
-            # Мгновенное применение критических параметров
-            if section == "ai_settings":
-                if key == "model":
-                    self.chat.set_model(value)
-                elif key == "temperature":
-                    self.chat.set_temperature(value)
-                elif key == "system_prompt":
-                    self.chat.set_system_prompt(value)
-            elif section == "voice_settings":
-                if key == "language":
-                    self.audio.language = value
-                elif key == "enabled":
-                    if value and not self.is_active:
-                        self.set_active(True)
-                    elif not value and self.is_active:
-                        self.set_active(False)
-                elif key == "sfx_enabled":
-                    sfx.set_enabled(bool(value))
-                elif key == "follow_up_enabled":
-                    self.follow_up_enabled = bool(value)
-                    if not value:
-                        self._cancel_follow_up_timer()
-                elif key == "follow_up_timeout":
-                    self.follow_up_timeout = int(value or 8)
-                elif key == "logging_enabled":
-                    self.logging_enabled = bool(value)
-            elif section == "app_settings" and key == "auto_listening":
+        self.settings[section][key] = value
+        saved = self.settings_manager.set(section, key, value)
+        self.settings = self.settings_manager.get_all()
+
+        # Мгновенное применение критических параметров
+        if section == "ai_settings":
+            if key == "model":
+                self.chat.set_model(value)
+            elif key == "temperature":
+                self.chat.set_temperature(value)
+            elif key == "system_prompt":
+                self.chat.set_system_prompt(value)
+        elif section == "voice_settings":
+            if key == "language":
+                self.audio.language = value
+            elif key == "enabled":
                 if value and not self.is_active:
                     self.set_active(True)
                 elif not value and self.is_active:
                     self.set_active(False)
+            elif key == "sfx_enabled":
+                sfx.set_enabled(bool(value))
+            elif key == "follow_up_enabled":
+                self.follow_up_enabled = bool(value)
+                if not value:
+                    self._cancel_follow_up_timer()
+            elif key == "follow_up_timeout":
+                self.follow_up_timeout = int(value or 8)
+            elif key == "logging_enabled":
+                self.logging_enabled = bool(value)
+        elif section == "app_settings" and key == "auto_listening":
+            if value and not self.is_active:
+                self.set_active(True)
+            elif not value and self.is_active:
+                self.set_active(False)
 
-            return saved
-        return False
+        return saved
 
     def reset_settings(self) -> bool:
         """Сбрасывает настройки до стандартных."""
@@ -431,14 +492,16 @@ class ZeusController:
             self._cancel_follow_up_timer()
             self._transition_state("IDLE")
             # stop_listening() ждёт завершения потока прослушивания
-            # (_listen_thread.join(timeout=3)) — выполняем его в фоновом
-            # потоке, чтобы не блокировать поток Flet (кнопка «Отключиться»)
-            # и коллбэки аудио-движка.
-            threading.Thread(
-                target=self.audio.stop_listening,
-                daemon=True,
-                name="zeus-audio-stop",
-            ).start()
+            # (_listen_thread.join(timeout=3)) — выполняем его в пуле потоков,
+            # чтобы не блокировать поток Flet (кнопка «Отключиться») и коллбэки аудио-движка.
+            try:
+                self._executor.submit(self.audio.stop_listening)
+            except Exception:
+                threading.Thread(
+                    target=self.audio.stop_listening,
+                    daemon=True,
+                    name="zeus-audio-stop",
+                ).start()
         else:
             # Возврат в «ожидание»: микрофон слушает только «Зевс»
             self._reset_to_idle()
@@ -475,6 +538,21 @@ class ZeusController:
             return
 
         self._log_session("COMMAND", text, source=source)
+
+        # --- Стоп-слово («молчи»/«стоп»/«хватит» и т.д.) ---
+        # ВАЖНО: раньше эта проверка была только внутри
+        # AudioEngine._handle_listen_text() (основной цикл «разбудили по
+        # Зевс -> слушаем команду»). Всё, что попадает сюда любым ДРУГИМ
+        # путём — например кнопка «Прослушать один раз»
+        # (controller.listen_once() -> process_text(source="voice")), —
+        # проверку не проходило вообще, и «стоп» улетало в LLM как обычная
+        # фраза вместо прерывания речи. _is_stop_command()/_handle_stop_command()
+        # уже существовали в этом классе, но были фактически мертвы: ничего
+        # их не вызывало на реальном входящем тексте. Теперь вызывается здесь,
+        # так что работает независимо от того, как текст попал в process_text().
+        if self._is_stop_command(text):
+            self._handle_stop_command(text)
+            return
 
         # --- Проверка команд спящего режима ---
         text_lower = text.lower().strip()
@@ -717,7 +795,7 @@ class ZeusController:
         # см. _finish_voice_command(): из _command_loop (системная команда)
         # или из _on_chat_complete/_on_chat_error (ответ LLM).
         self._pending_follow_up = True
-        self.execute_action_async(self.execute_command, text)
+        self.execute_command(text)
 
     def _cancel_followup_watchdog(self):
         """Отменяет страховочный таймер завершения голосовой команды."""
@@ -804,12 +882,12 @@ class ZeusController:
         self._session_retry_timer.start()
 
     def execute_action_async(self, action_func, *args, **kwargs):
-        """Запускает выполнение команды/действия в фоновом потоке.
+        """Запускает выполнение команды/действия в фоновом пуле потоков.
 
         Универсальная обёртка (по ТЗ): любые внешние программы, поиск и
-        системные вызовы выполняются в daemon-потоке, поэтому главный поток
+        системные вызовы выполняются в рабочем пуле, поэтому главный поток
         отрисовки Flet никогда не блокируется и плашка «Working...» не
-        появляется. Ошибки изолируются внутри потока.
+        появляется. Ошибки изолируются внутри задачи.
         """
         def worker():
             try:
@@ -819,7 +897,10 @@ class ZeusController:
                 import traceback
                 traceback.print_exc()
 
-        threading.Thread(target=worker, daemon=True, name="zeus-action-async").start()
+        try:
+            self._executor.submit(worker)
+        except Exception:
+            threading.Thread(target=worker, daemon=True, name="zeus-action-async").start()
 
     def execute_command(self, text: str):
         """Ставит команду в фоновую очередь и сразу возвращается.
@@ -851,7 +932,7 @@ class ZeusController:
         self._switch_audio_mode("wake")
 
     def _switch_audio_mode(self, mode: str):
-        """Переключает микрофон асинхронно (в отдельном потоке).
+        """Переключает микрофон асинхронно через рабочий пул потоков.
 
         Защиты от гонок и преждевременного возврата в Wake Word:
           1. Переключение выполняется с небольшой задержкой, чтобы текущий
@@ -869,15 +950,18 @@ class ZeusController:
             with self._audio_lock:
                 # Сначала базовая задержка на освобождение микрофона текущим потоком
                 time.sleep(0.05)
-                # Устаревшее переключение (было запрошено более новое) — пропускаем
-                if my_seq != self._switch_seq:
+                # Устаревшее переключение или закрытие приложения — пропускаем
+                if my_seq != self._switch_seq or self._is_cleaned_up:
                     return
                 if mode == "wake":
                     self.audio.start_wake_mode()
                 elif mode == "command":
                     self.audio.start_command_mode()
 
-        threading.Thread(target=_worker, daemon=True).start()
+        try:
+            self._executor.submit(_worker)
+        except Exception:
+            threading.Thread(target=_worker, daemon=True).start()
 
     # ------------------------------------------------------------------
     # Системные команды
@@ -985,6 +1069,8 @@ class ZeusController:
         """Мониторит завершение сканирования флешки."""
         def _monitor():
             for _ in range(120):
+                if self._is_cleaned_up:
+                    return
                 res = getattr(actions.confirm_drive_scan, "_last_result", None)
                 if res is not None and res.get("drive") == drive:
                     added = res.get("added", 0)
@@ -1012,7 +1098,10 @@ class ZeusController:
             timeout_msg = f"Не удалось завершить сканирование {drive} вовремя, сэр."
             self._set_status(timeout_msg)
 
-        threading.Thread(target=_monitor, daemon=True).start()
+        try:
+            self._executor.submit(_monitor)
+        except Exception:
+            threading.Thread(target=_monitor, daemon=True).start()
 
     # ------------------------------------------------------------------
     # Управление голосом
@@ -1035,18 +1124,239 @@ class ZeusController:
     def stop_voice(self):
         """Останавливает фоновое прослушивание.
 
-        stop_listening() содержит join до 3 с — вызываем его в фоновом
-        потоке (daemon), чтобы переключатель в UI не подвешивал Flet.
+        stop_listening() содержит join до 3 с — вызываем его в пуле потоков,
+        чтобы переключатель в UI не подвешивал Flet.
         """
         self._cancel_follow_up_timer()
         self._pending_follow_up = False
         self._cancel_followup_watchdog()
-        threading.Thread(
-            target=self.audio.stop_listening,
-            daemon=True,
-            name="zeus-audio-stop",
-        ).start()
+        try:
+            self._executor.submit(self.audio.stop_listening)
+        except Exception:
+            threading.Thread(
+                target=self.audio.stop_listening,
+                daemon=True,
+                name="zeus-audio-stop",
+            ).start()
         self._transition_state("IDLE")
+
+    def stop_device_watcher(self):
+        """Останавливает наблюдатель аудиоустройств, если он был запущен."""
+        try:
+            from core import audio_devices
+            if hasattr(audio_devices, "stop_watcher"):
+                audio_devices.stop_watcher()
+        except Exception:
+            pass
+
+    def start_device_watcher(
+        self, on_event: Callable[[dict[str, Any]], None] | None = None
+    ) -> bool:
+        """Запускает hot-plug наблюдатель и связывает UI-колбэк (ТЗ §2.4/3.1).
+
+        Вызывается из main_flet сразу после подключения UI-колбэков.
+        Идемпотентно: повторный вызов лишь обновляет колбэк и гарантирует,
+        что наблюдатель запущен.
+
+        on_event получает payload-словари:
+          {"event": "added", "device": {...}}
+          {"event": "removed", "device": {...}}
+          {"event": "auto_switched_input", "device": {...}}  — активный мик пропал
+          {"event": "input_lost"} / {"event": "output_lost"} — устройств не осталось
+
+        Returns:
+            True, если наблюдатель запущен.
+        """
+        self._ui_device_event_cb = on_event
+        try:
+            from core import audio_devices as _ad
+            dw = self._device_watcher or _ad.get_global_watcher()
+            dw.start()  # идемпотентно внутри DeviceWatcher
+            # Расширенные колбэки: трей-обновление + UI-payload + автовыбор.
+            # Заменяют ранние лямбды из __init__ (тот же _on_audio_device_changed
+            # вызывается внутри _hotplug_notify — поведение сохраняется).
+            dw.on_device_added = self._on_hotplug_added
+            dw.on_device_removed_with_info = self._on_hotplug_removed
+            self._device_watcher = dw
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] Ошибка start_device_watcher: {exc}")
+            return False
+
+    def _hotplug_notify(self, event: str, dev: "Any | None" = None) -> None:
+        """Единая точка hot-plug уведомлений: трей + UI-колбэк."""
+        self._on_audio_device_changed()  # обновление аудио-подменю трея
+        cb = getattr(self, "_ui_device_event_cb", None)
+        if cb is None:
+            return
+        payload: dict[str, Any] = {"event": event}
+        if dev is not None:
+            try:
+                payload["device"] = dev.to_dict()
+            except Exception:  # noqa: BLE001
+                payload["device"] = {}
+        try:
+            cb(payload)
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] Ошибка UI-события аудио ({event}): {exc}")
+
+    def _on_hotplug_added(self, dev) -> None:
+        """Подключено новое аудиоустройство."""
+        self._hotplug_notify("added", dev)
+
+    def _on_hotplug_removed(self, dev) -> None:
+        """Отключено устройство: автовыбор, если ушёл активный микрофон/вывод.
+
+        ТЗ §2.4: при исчезновении выбранного микрофона — автовыбор по
+        приоритету типов (pick_best_device); если ввода не осталось —
+        событие input_lost. Для вывода — возврат к системному дефолту.
+        """
+        self._hotplug_notify("removed", dev)
+        try:
+            voice = self.settings.get("voice_settings", {}) or {}
+            if dev.is_input and voice.get("input_device_id") == dev.id:
+                from core.audio_devices import list_devices, pick_best_device
+                best = pick_best_device(list_devices(), kind="input")
+                if best is not None:
+                    self.set_input_device(best.id)
+                    self._hotplug_notify("auto_switched_input", best)
+                else:
+                    self.set_input_device(None)
+                    self._hotplug_notify("input_lost")
+            elif (not dev.is_input) and voice.get("output_device_id") == dev.id:
+                self.set_output_device(None)
+                self._hotplug_notify("output_lost")
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] Ошибка автопереключения после отключения: {exc}")
+
+    # ------------------------------------------------------------------
+    # Управление аудиоустройствами
+    # ------------------------------------------------------------------
+
+    def get_available_input_devices(self) -> list[dict]:
+        """Возвращает список доступных устройств ввода (микрофонов).
+
+        Returns:
+            Список словарей [{"id": ..., "name": ..., "label": ..., ...}].
+        """
+        try:
+            from core.audio_devices import list_devices
+            return [d.to_dict() for d in list_devices() if d.is_input]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def get_available_output_devices(self) -> list[dict]:
+        """Возвращает список доступных устройств вывода (динамики/наушники).
+
+        Returns:
+            Список словарей [{"id": ..., "name": ..., "label": ..., ...}].
+        """
+        try:
+            from core.audio_devices import list_devices
+            return [d.to_dict() for d in list_devices() if not d.is_input]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def set_input_device(self, device_id: str | None) -> None:
+        """Переключает активный микрофон (трей/настройки, Спринт 1 §2.3).
+
+        Сохраняет выбор в settings.json и применяет его штатным API
+        AudioEngine.switch_input_device: резолв ID→индекс, проверка
+        микрофона, обновление wake-детектора и перезапуск циклов
+        прослушивания. device_id=None — авто-режим (системный дефолт).
+
+        Args:
+            device_id: ID устройства из AudioDevice.id, либо None — авто.
+        """
+        self.update_settings("voice_settings", "input_device_id", device_id)
+        try:
+            switch = getattr(self.audio, "switch_input_device", None)
+            if callable(switch):
+                switch(device_id)
+            else:
+                # Заглушки/старые движки: прямой индекс без перезапуска циклов
+                from core.audio_devices import resolve_device_id_to_index
+                idx = resolve_device_id_to_index(device_id, "input") if device_id else None
+                self.audio._mic_device_index = idx
+            name = self._device_display_name(device_id, "input")
+            shown = f"«{name}»" if name else "авто (системный по умолчанию)"
+            log(f"[AUDIO] 🎤 Активный микрофон: {shown}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] Ошибка set_input_device: {exc}")
+
+    def set_output_device(self, device_id: str | None) -> None:
+        """Переключает активное устройство вывода (Спринт 1 §2.3).
+
+        Сохраняет выбор в settings.json и применяет его штатным API
+        AudioEngine.switch_output_device; TTS-движок подхватывает индекс
+        при следующем speak(). device_id=None — авто-режим.
+
+        Args:
+            device_id: ID устройства из AudioDevice.id, либо None — авто.
+        """
+        self.update_settings("voice_settings", "output_device_id", device_id)
+        try:
+            switch = getattr(self.audio, "switch_output_device", None)
+            if callable(switch):
+                switch(device_id)
+            elif hasattr(self.audio, "_output_device_index"):
+                from core.audio_devices import resolve_device_id_to_index
+                idx = resolve_device_id_to_index(device_id, "output") if device_id else None
+                self.audio._output_device_index = idx
+            name = self._device_display_name(device_id, "output")
+            shown = f"«{name}»" if name else "авто (системный по умолчанию)"
+            log(f"[AUDIO] 🔊 Активный вывод: {shown}")
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] Ошибка set_output_device: {exc}")
+
+    @staticmethod
+    def _device_display_name(device_id: str | None, kind: str) -> str | None:
+        """Имя аудиоустройства по стабильному ID (для [AUDIO]-диагностики)."""
+        if not device_id:
+            return None
+        try:
+            from core.audio_devices import list_devices
+            for dev in list_devices():
+                if dev.id == device_id and dev.kind == kind:
+                    return dev.name
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+    def _on_audio_default_changed(self, kind: str, device_id: str) -> None:
+        """Системный аудио-маршрут ОС сменился (Спринт 1, диагностика).
+
+        Вызывается из DeviceWatcher в фоновом потоке. Пишет причину в
+        [AUDIO]-строку терминала и обновляет аудио-подменю трея: активная
+        отметка может «уехать» вслед за системным дефолтом.
+
+        Примечание: явный выбор пользователя (settings.voice_settings)
+        не перезаписывается — меняется лишь системный дефолт Windows.
+        """
+        if self._is_cleaned_up:
+            return
+        try:
+            label = "ввода" if kind == "input" else "вывода"
+            name = self._device_display_name(device_id, kind) or device_id
+            log(f"[AUDIO] 🔀 Системный маршрут {label} переключён: «{name}»")
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] Ошибка _on_audio_default_changed: {exc}")
+        self._on_audio_device_changed()
+
+    def _on_audio_device_changed(self) -> None:
+        """Callback горячего подключения/отключения аудиоустройства.
+
+        Вызывается из DeviceWatcher в фоновом потоке. Уведомляет трей
+        об обновлении списка устройств через on_tray_audio_update.
+        """
+        if self._is_cleaned_up:
+            return
+        cb = self.on_tray_audio_update
+        if cb is not None:
+            try:
+                cb()
+            except Exception as exc:  # noqa: BLE001
+                log(f"[Controller] Ошибка on_tray_audio_update: {exc}")
 
     def listen_once(self) -> str | None:
         """Однократное распознавание речи (для кнопки)."""
@@ -1129,7 +1439,6 @@ class ZeusController:
         if not self.logging_enabled:
             return
         try:
-            import json
             os.makedirs(os.path.dirname(self._session_log_path), exist_ok=True)
             line = (
                 f"[{time.strftime('%H:%M:%S')}] {event}({source}) "
@@ -1146,6 +1455,34 @@ class ZeusController:
     # Cleanup
     # ------------------------------------------------------------------
     def cleanup(self):
-        """Освобождает ресурсы."""
+        """Освобождает ресурсы, останавливает фоновые потоки и таймеры."""
+        self._is_cleaned_up = True
         self._cancel_follow_up_timer()
+        self._cancel_idle_return_timer()
+        self._cancel_session_retry()
+        self._cancel_followup_watchdog()
+        self.stop_device_watcher()
+
+        # Корректная остановка очереди команд
+        try:
+            self._cmd_queue.put(None)
+        except Exception:
+            pass
+
+        # Остановка вотчера файлов
+        watcher = getattr(self, "_watcher", None)
+        if watcher is not None:
+            try:
+                watcher.stop()
+            except Exception:
+                pass
+
+        # Остановка пула воркеров
+        executor = getattr(self, "_executor", None)
+        if executor is not None:
+            try:
+                executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+
         self.audio.cleanup()

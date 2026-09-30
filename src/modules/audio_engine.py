@@ -99,8 +99,12 @@ class ModelLoaderThread(threading.Thread):
             if self.engine.wake.available:
                 self.engine.wake._ensure_loaded()
                 success = bool(self.engine.wake._loaded) and success
-            if self.on_progress:
-                self.on_progress("Модель Vosk загружена")
+                if self.on_progress:
+                    self.on_progress("Модель Vosk загружена")
+            else:
+                success = False
+                if self.on_progress:
+                    self.on_progress("Vosk недоступен")
         except Exception as exc:  # noqa: BLE001
             success = False
             if self.on_progress:
@@ -239,7 +243,13 @@ class AudioEngine:
         on_command: callback(command_text) — вызывается при распознавании команды
     """
 
-    def __init__(self, language: str = "ru-RU", mic_index: int | None = None):
+    def __init__(
+        self,
+        language: str = "ru-RU",
+        mic_index: int | None = None,
+        input_device_id: str | None = None,
+        output_device_id: str | None = None,
+    ):
         self.language = language
         self.is_active = True  # Спящий режим: по умолчанию включён
         self.is_speaking = False  # True, когда Зевс сам говорит (детектор заглушён)
@@ -263,6 +273,26 @@ class AudioEngine:
 
         # Распознавание речи
         self.recognizer = sr.Recognizer()
+        # Стабильные ID устройств (ТЗ v1.4 §2.7): endpoint-ID хранится в
+        # конфиге, числовой индекс sounddevice — только рантайм-кэш.
+        self._input_device_id = input_device_id
+        self._output_device_id = output_device_id
+        self._output_device_index = None
+        if output_device_id:
+            try:
+                from core.audio_devices import resolve_device_id_to_index
+                self._output_device_index = resolve_device_id_to_index(
+                    output_device_id, kind="output"
+                )
+            except Exception:  # noqa: BLE001 — вывод в системный дефолт
+                self._output_device_index = None
+        # Стабильный ID ввода имеет приоритет над устаревшим mic_index.
+        if input_device_id and mic_index is None:
+            try:
+                from core.audio_devices import resolve_device_id_to_index
+                mic_index = resolve_device_id_to_index(input_device_id, kind="input")
+            except Exception:  # noqa: BLE001
+                mic_index = None
         # Auto-Detect Mic: если mic_index задан в настройках — используем его,
         # иначе автоматически выбираем устройство ввода по умолчанию.
         # _mic_device_index / _mic_device_name присваиваются внутри _check_microphone.
@@ -379,6 +409,65 @@ class AudioEngine:
     def is_mic_available(self) -> bool:
         """Возвращает True, если микрофон доступен."""
         return self._mic_available
+
+    # ------------------------------------------------------------------
+    # Переключение устройств на лету (v1.4, ТЗ §2.4/2.5)
+    # ------------------------------------------------------------------
+    def switch_input_device(self, device_id: str | None) -> bool:
+        """Переключает микрофон на устройство по стабильному ID.
+
+        Резолвит endpoint-ID в текущий индекс (индексы «переезжают» при
+        hot-plug), обновляет wake-детектор и перезапускает циклы
+        прослушивания без пересоздания движка. Возвращает успех.
+
+        device_id=None — авто-режим: возврат к системному устройству
+        ввода по умолчанию (например, пункт «Авто» в трее/настройках).
+        """
+        if device_id is None:
+            # Авто-режим: сбрасываем явный выбор и берём системный дефолт
+            self._input_device_id = None
+            ok = self._check_microphone(preferred=None)
+        else:
+            try:
+                from core.audio_devices import resolve_device_id_to_index
+                index = resolve_device_id_to_index(device_id, kind="input")
+            except Exception as exc:  # noqa: BLE001
+                _log_audio_error(f"Ошибка резолва устройства ввода: {exc}")
+                return False
+            if index is None:
+                return False
+            self._input_device_id = device_id
+            ok = self._check_microphone(preferred=index)
+        try:
+            if ok and self.wake is not None:
+                self.wake.set_mic_device(self._mic_device_index)
+                self._restart_loops()
+        except Exception as exc:  # noqa: BLE001
+            _log_audio_error(f"Ошибка перезапуска после смены микрофона: {exc}")
+        return ok
+
+    def switch_output_device(self, device_id: str | None) -> bool:
+        """Переключает устройство вывода (Piper) по стабильному ID.
+
+        pyttsx3-фолбэк продолжает играть в системный дефолт: смена системного
+        дефолтного устройства заметна пользователю и задевает другие
+        приложения — применяется только как крайний случай (ТЗ §6).
+        """
+        try:
+            from core.audio_devices import resolve_device_id_to_index
+            index = resolve_device_id_to_index(device_id, kind="output")
+        except Exception as exc:  # noqa: BLE001
+            _log_audio_error(f"Ошибка резолва устройства вывода: {exc}")
+            return False
+        self._output_device_id = device_id
+        self._output_device_index = index
+        return device_id is None or index is not None
+
+    def get_current_input_device_id(self) -> str | None:
+        return self._input_device_id
+
+    def get_current_output_device_id(self) -> str | None:
+        return self._output_device_id
 
     def _print_mic_devices(self):
         """Выводит в консоль список всех устройств ввода (для отладки/выбора)."""
@@ -986,7 +1075,8 @@ class AudioEngine:
         if engine == "piper":
             try:
                 from modules.tts_piper import speak_piper
-                if speak_piper(text):
+                # ТЗ v1.4 §2.5: Piper играет в выбранное устройство вывода.
+                if speak_piper(text, device=getattr(self, "_output_device_index", None)):
                     return  # озвучено Piper
             except Exception:
                 pass  # фолбэк ниже
