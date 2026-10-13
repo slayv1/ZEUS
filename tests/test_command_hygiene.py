@@ -19,6 +19,19 @@ def test_настоящие_программы_остаются():
     assert is_noise_executable(r"C:\Python314\python.exe") is False
     assert is_noise_executable(r"D:\Игры\Control\Control.exe") is False
     assert is_noise_executable("steam://rungameid/730") is False
+    assert is_noise_executable(
+        r"C:\Users\admin\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+    ) is False
+
+
+def test_кэши_редакторов_это_мусор():
+    assert is_noise_executable(
+        r"C:\Users\admin\.vscode\extensions\ms-python\debugpy\vsdbg.exe"
+    )
+    assert is_noise_executable(r"C:\Users\admin\.nuget\packages\app\apphost.exe")
+    assert is_noise_executable(r"C:\Users\admin\.codex\plugins\codex.exe")
+    assert is_noise_executable(r"C:\Users\admin\.lmstudio\bin\lms.exe")
+    assert is_noise_executable(r"C:\Users\admin\.flet\client\flet\flet.exe")
 
 
 def test_установщики_по_имени():

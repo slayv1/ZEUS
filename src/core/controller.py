@@ -672,6 +672,34 @@ class ZeusController:
                 "action": "unknown",
             })
 
+    def _route_pending(self, text: str) -> bool:
+        """«Да» и «нет» отвечают агенту и не идут в системные команды.
+
+        Любая другая фраза снимает ожидание: иначе следующее случайное «да»
+        выполнило бы старый клик или запуск.
+        """
+        from core.agent_harness import PendingAction, classify_confirmation
+
+        pending = getattr(self.chat, "_pending", None)
+        if not isinstance(pending, PendingAction):
+            return False
+        if classify_confirmation(text) is None:
+            self.chat.cancel_pending()
+            log("[Controller] подтверждение снято: пришла другая команда")
+            return False
+        if self._send_to_llm(text):
+            self._arm_llm_watchdog()
+        return True
+
+    def _arm_llm_watchdog(self) -> None:
+        """Страховка: если ответ модели завис, голос всё равно вернётся в ожидание."""
+        self._cancel_followup_watchdog()
+        self._followup_watchdog = threading.Timer(
+            self.follow_up_timeout + 90.0, self._finish_voice_command
+        )
+        self._followup_watchdog.daemon = True
+        self._followup_watchdog.start()
+
     def _command_loop(self):
         """Поток-потребитель: последовательно исполняет команды из очереди.
 
@@ -692,6 +720,8 @@ class ZeusController:
                 break
             try:
                 try:
+                    if self._route_pending(text):
+                        continue
                     command_result = router.call("run_command", text)
                 except Exception as e:  # noqa: BLE001
                     import traceback
@@ -710,16 +740,8 @@ class ZeusController:
                         # окно уточнений / возвращаемся в IDLE.
                         self._finish_voice_command()
                     else:
-                        self._send_to_llm(text)
-                        # Ответ LLM приходит асинхронно (on_complete/on_error);
-                        # follow-up откроется там. Страховка на случай, если
-                        # генерация зависнет:
-                        self._cancel_followup_watchdog()
-                        self._followup_watchdog = threading.Timer(
-                            self.follow_up_timeout + 90.0, self._finish_voice_command
-                        )
-                        self._followup_watchdog.daemon = True
-                        self._followup_watchdog.start()
+                        if self._send_to_llm(text):
+                            self._arm_llm_watchdog()
                 except Exception:  # noqa: BLE001
                     # Ошибка доставки результата (UI/TTS/LLM) НЕ должна
                     # убивать поток-потребитель: иначе ассистент навсегда
@@ -766,6 +788,8 @@ class ZeusController:
         self._cancel_idle_return_timer()
         self._cancel_session_retry()
         self._after_speech = None
+        if getattr(self, "chat", None) is not None:
+            self.chat.cancel_pending()
         self._transition_state("IDLE", force=True)
         self._set_status("Ожидание «Зевс»...")
         self._switch_audio_mode("wake")
@@ -1121,14 +1145,14 @@ class ZeusController:
     # ------------------------------------------------------------------
     # Отправка в LLM (Chat Engine)
     # ------------------------------------------------------------------
-    def _send_to_llm(self, text: str):
-        """Отправляет текст в Ollama для генерации ответа."""
+    def _send_to_llm(self, text: str) -> bool:
+        """Отправляет текст в Ollama. False — модель ещё занята прошлым запросом."""
         if self.chat.is_busy():
             self._set_status("Зевс уже думает...")
             # Завершаем голосовую команду сразу: не держим FSM в PROCESSING,
             # пока отвечает предыдущий (не наш) запрос.
             self._finish_voice_command()
-            return
+            return False
 
         self._set_status("Зевс думает...")
 
@@ -1138,6 +1162,7 @@ class ZeusController:
 
         # Отправляем в LLM
         self.chat.ask(text)
+        return True
 
     def _on_chat_token(self, token: str):
         """Обработчик нового токена от LLM."""

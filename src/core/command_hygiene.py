@@ -33,6 +33,15 @@ _NOISE_DIR_PARTS = {
     "packagecache",
     "commonredist",
     "espeak-ng-data",
+    # Кэши редакторов и утилит: это не то, что запускают голосом.
+    ".codex",
+    ".nuget",
+    ".lmstudio",
+    ".kimi-code",
+    ".unity",
+    ".vscode",
+    ".flet",
+    ".cursor",
 }
 
 # Каталоги стандартной поставки CPython: не приложения, даже если лежат

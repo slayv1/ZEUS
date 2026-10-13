@@ -168,6 +168,41 @@ def test_безопасный_инструмент_без_вопроса():
     assert result.text == "Прочитал."
 
 
+def test_другая_команда_снимает_подтверждение():
+    from unittest.mock import patch
+
+    from core.agent_harness import PendingAction
+    from core.controller import ZeusController
+
+    with patch("core.controller.AudioEngine"), patch("core.controller.ChatEngine"):
+        ctrl = ZeusController()
+        try:
+            pending = PendingAction(
+                name="launch_app",
+                arguments={"name": "блокнот"},
+                prompt="Запустить?",
+                messages=[],
+                rest_calls=[],
+                allow_write=False,
+                allow_actions=True,
+                max_steps=5,
+                step=1,
+            )
+            ctrl.chat._pending = pending
+            ctrl.chat.is_busy.return_value = False
+            ctrl.chat.cancel_pending.side_effect = lambda: setattr(ctrl.chat, "_pending", None)
+            assert ctrl._route_pending("да, сэр") is True
+            ctrl.chat.ask.assert_called_once()
+
+            ctrl.chat._pending = pending
+            ctrl.chat.ask.reset_mock()
+            assert ctrl._route_pending("открой хром") is False
+            ctrl.chat.ask.assert_not_called()
+            assert ctrl.chat._pending is None
+        finally:
+            ctrl.cleanup()
+
+
 def test_классификация_подтверждения():
     assert classify_confirmation("Да, сэр") == "yes"
     assert classify_confirmation("нет") == "no"
