@@ -35,6 +35,24 @@ class CommandRouter:
     def has(self, command_name: str) -> bool:
         return command_name in self.routes
 
+    def call(self, command_name: str, *args, **kwargs):
+        """Синхронный вызов обработчика. Возвращает его результат.
+
+        Это дверь для очереди команд контроллера: тот же обработчик,
+        что зарегистрирован для фонового ``dispatch``, но с ответом
+        вызывающему. Ошибка пишется в zeus.log и пробрасывается дальше.
+        """
+        if command_name not in self.routes:
+            raise KeyError(f"Неизвестная команда: {command_name}")
+        try:
+            return self.routes[command_name](*args, **kwargs)
+        except Exception:
+            import traceback
+
+            from core.logging_service import error
+            error(f"[Router] {command_name}:\n{traceback.format_exc()}")
+            raise
+
     async def dispatch(self, command_name: str, *args, **kwargs) -> None:
         """Асинхронный запуск команды в фоне.
 

@@ -416,7 +416,12 @@ class SettingsManager:
                     json.dump(self._settings, file, ensure_ascii=False, indent=4)
                 os.replace(tmp_path, self.path)
                 return True
-            except OSError:
+            except OSError as exc:
+                try:
+                    from core.logging_service import error
+                    error(f"[Settings] не записал {self.path}: {exc}")
+                except Exception:
+                    pass
                 try:
                     tmp_path.unlink(missing_ok=True)
                 except OSError:

@@ -751,7 +751,8 @@ class AudioEngine:
                 for _ in range(2):
                     try:
                         stream.read(chunk)
-                    except Exception:  # noqa: BLE001
+                    except Exception as exc:  # noqa: BLE001
+                        _log_audio_error(f"Ошибка сброса буфера микрофона: {exc}")
                         break
                 # Шумовой гейт (ТЗ v1.4 §2.2): гул кулеров, клики клавиатуры и
                 # шорох стола раньше попадали прямо в KaldiRecognizer и рождали
@@ -767,7 +768,11 @@ class AudioEngine:
                 while self._listen_running:
                     try:
                         data, _ = stream.read(chunk)
-                    except Exception:
+                    except Exception as exc:
+                        now_err = _wtime.monotonic()
+                        if now_err - getattr(self, "_last_mic_err", 0.0) > 5.0:
+                            self._last_mic_err = now_err
+                            _log_audio_error(f"Ошибка чтения микрофона: {exc}")
                         continue
                     if data is None or len(data) == 0:
                         continue

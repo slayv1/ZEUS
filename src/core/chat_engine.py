@@ -126,6 +126,8 @@ class ChatEngine:
         self.agent_max_steps = 5
         self.agent_allow_write = False
         self.agent_allow_actions = False
+        # Действие агента, которое ждёт «да» или «нет» в следующем сообщении.
+        self._pending = None
 
         # Callbacks
         self.on_token: Callable[[str], None] | None = None
@@ -191,8 +193,12 @@ class ChatEngine:
             try:
                 os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
                 write_json_atomic(_CACHE_PATH, self._cache, indent=2)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                try:
+                    from core.logging_service import error
+                    error(f"[AI] не записал кэш ответов: {exc}")
+                except Exception:
+                    pass
 
     def _remember(self, query: str, answer: str) -> None:
         """«Запоминает» короткий частый запрос для мгновенного ответа впредь.
@@ -257,17 +263,35 @@ class ChatEngine:
         canned-ответ или накопленный из прошлых генераций), отвечает мгновенно
         без обращения к локальной модели Ollama.
 
+        Если агент ждёт подтверждения, «да» и «нет» не идут в кэш и не
+        запускают новый запрос к модели.
+
         Работает в отдельном потоке через синхронный ollama.chat — без asyncio,
         чтобы избежать ошибки «Event loop is closed».
         """
+        from core.agent_harness import classify_confirmation
+
+        decision = None
         with self._busy_lock:
             if self._is_busy:
                 return
+            if self._pending is not None:
+                decision = classify_confirmation(text)
+                if decision is None:
+                    self._pending = None
             # --- Быстрый путь: ответ из кэша без обращения к Ollama ---
-            cached = self.get_cached_answer(text)
+            cached = None if decision else self.get_cached_answer(text)
             # Занимаем флаг ДО запуска фонового потока: иначе параллельный
             # ask() пройдёт проверку занятости одновременно с нами.
             self._is_busy = True
+
+        if decision is not None:
+            threading.Thread(
+                target=self._resume_pending,
+                args=(text, decision == "yes"),
+                daemon=True,
+            ).start()
+            return
 
         if cached is not None:
             self.conversation.append({"role": "user", "content": text})
@@ -392,11 +416,45 @@ class ChatEngine:
             return None
 
         full_text = result.text or ""
+        if result.pending is not None:
+            self._pending = result.pending
         self.conversation.append({"role": "assistant", "content": full_text})
-        if not result.used_tools:
+        if result.pending is None and not result.used_tools:
             # Ответ без инструментов — обычный чат, кэшируем как раньше.
             self._remember(text, full_text)
         return full_text
+
+    def _resume_pending(self, text: str, approved: bool) -> None:
+        """Выполняет или отклоняет действие, которое ждало «да»."""
+        pending = self._pending
+        self._pending = None
+        full_text = ""
+        try:
+            if pending is None:
+                return
+            self.conversation.append({"role": "user", "content": text})
+            from core.agent_harness import AgentHarness
+            harness = AgentHarness(on_event=print)
+            result = harness.resume(
+                self.client,
+                pending,
+                approved=approved,
+                model=self.model,
+                temperature=self.temperature,
+            )
+            full_text = result.text or ""
+            if result.pending is not None:
+                self._pending = result.pending
+            self.conversation.append({"role": "assistant", "content": full_text})
+            if self.on_token:
+                self.on_token(full_text)
+            if self.on_complete:
+                self.on_complete(full_text)
+        except Exception as exc:  # noqa: BLE001
+            self._trigger_error(f"Не подтвердил действие: {exc}")
+        finally:
+            with self._busy_lock:
+                self._is_busy = False
 
     def _trigger_error(self, message: str):
         """Уведомляет UI об ошибке через on_error (если зарегистрирован)."""
@@ -407,7 +465,8 @@ class ChatEngine:
     # Управление историей
     # ------------------------------------------------------------------
     def new_chat(self):
-        """Очищает историю диалога."""
+        """Очищает историю диалога и невыполненное подтверждение."""
+        self._pending = None
         self.conversation.clear()
 
     def set_model(self, model: str):

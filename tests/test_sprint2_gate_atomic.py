@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core import actions
+from core import actions, actions_launch, actions_media
 from core.atomic_json import read_json_safe, write_json_atomic
 from core.audio_gate import NoiseGate, peak_level
 from core.config import DEFAULT_SETTINGS
@@ -300,7 +300,7 @@ class TestAtomicJson:
 class TestCommandsAtomicSave:
     def test_save_commands_пишет_и_не_оставляет_tmp(self, tmp_path):
         path = tmp_path / "commands.json"
-        with patch.object(actions, "_commands_path", return_value=str(path)):
+        with patch.object(actions_launch, "_commands_path", return_value=str(path)):
             assert actions._save_commands({"приложения": {"хром": "C:\\x.exe"}}) is True
         assert json.loads(path.read_text(encoding="utf-8")) == {
             "приложения": {"хром": "C:\\x.exe"}
@@ -309,11 +309,11 @@ class TestCommandsAtomicSave:
 
     def test_ошибка_записи_видна_пользователю(self, tmp_path):
         """Не «успех» с молча проглоченной ошибкой, а честный отказ."""
-        with patch.object(actions, "_commands_path",
+        with patch.object(actions_launch, "_commands_path",
                           return_value=str(tmp_path / "commands.json")), \
-             patch.object(actions, "load_commands",
+             patch.object(actions_launch, "load_commands",
                           return_value={"приложения": {"хром": "C:\\x.exe"}}), \
-             patch.object(actions, "write_json_atomic", return_value=False):
+             patch.object(actions_launch, "write_json_atomic", return_value=False):
             result = actions.delete_command("хром")
         assert result["success"] is False
         assert "диск" in result["message"].lower()
@@ -323,15 +323,17 @@ class TestCommandsAtomicSave:
         path.write_text(json.dumps({"приложения": {"хром": "C:\\x.exe",
                                                    "браузер": "C:\\y.exe"}},
                                    ensure_ascii=False), encoding="utf-8")
-        with patch.object(actions, "_commands_path", return_value=str(path)):
+        with patch.object(actions_launch, "_commands_path", return_value=str(path)):
             result = actions.delete_command("хром")
         assert result["success"] is True
         assert "хром" not in json.loads(path.read_text(encoding="utf-8"))["приложения"]
 
     def test_в_коде_не_осталось_прямых_записей_commands(self):
         """open(...,'w') + json.dump для commands.json — риск потери данных."""
-        source = open(actions.__file__, encoding="utf-8").read()
-        assert "json.dump(commands" not in source
+        launch_source = open(actions_launch.__file__, encoding="utf-8").read()
+        facade_source = open(actions.__file__, encoding="utf-8").read()
+        assert "json.dump(commands" not in launch_source
+        assert "json.dump(commands" not in facade_source
 
 
 # ---------------------------------------------------------------------------
@@ -376,13 +378,14 @@ class TestSafeCalc:
         а синтаксическим деревом: вызова eval() в модуле быть не должно."""
         import ast as _ast
         import io as _io
-        tree = _ast.parse(_io.open(actions.__file__, encoding="utf-8").read())
+        calc_path = actions_media.__file__
+        tree = _ast.parse(_io.open(calc_path, encoding="utf-8").read())
         calls = {
             node.func.id for node in _ast.walk(tree)
             if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name)
         }
         assert "eval" not in calls and "exec" not in calls
-        source = _io.open(actions.__file__, encoding="utf-8").read()
+        source = _io.open(calc_path, encoding="utf-8").read()
         assert "import ast" in source, "калькулятор обязан разбирать выражения парсером"
 
 

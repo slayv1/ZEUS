@@ -268,38 +268,15 @@ def is_path_denied(path: str) -> bool:
 # Инструменты: приложения
 # ---------------------------------------------------------------------------
 def _tool_launch_app(name: str) -> dict[str, Any]:
-    """Запускает приложение/игру из commands.json по имени."""
-    from core import actions
-
-    query = str(name or "").strip()
-    if not query:
-        return {"success": False, "message": "Не указано имя приложения.",
-                "action": "launch_app"}
-    commands = actions.load_commands()
-    found = actions.find_best_game_or_app(query, commands)
-    kind = found[0] if found else None
-    entry = found[1] if found else None
-    if kind == "game" and isinstance(entry, dict):
-        return actions._launch_game(query, entry)
-    if kind == "app" and isinstance(entry, str):
-        return actions._launch_app(query, entry)
-    return {
-        "success": False,
-        "message": f"Не нашёл «{query}» в базе команд, сэр. "
-                   "Скажите «запомни эту программу» или обновите базу.",
-        "action": "launch_app",
-    }
+    """Запуск из той же функции, что и голосовая команда."""
+    from core.command_effects import launch_named
+    return launch_named(name)
 
 
 def _tool_close_app(name: str) -> dict[str, Any]:
-    """Закрывает процесс; список системных процессов защищён в actions."""
-    from core import actions
-
-    query = str(name or "").strip()
-    if not query:
-        return {"success": False, "message": "Не указано имя приложения.",
-                "action": "close_app"}
-    return actions.close_application(query)
+    """Закрытие из той же функции, что и голосовая команда."""
+    from core.command_effects import close_named
+    return close_named(name)
 
 
 # ---------------------------------------------------------------------------
@@ -373,58 +350,15 @@ def parse_ddg_html(body: str, limit: int = 5) -> list[dict[str, str]]:
 
 
 def _tool_web_search(query: str) -> dict[str, Any]:
-    """Веб-поиск: разбор выдачи DuckDuckGo, фолбэк — открыть браузер."""
-    q = str(query or "").strip()
-    if not q:
-        return {"success": False, "message": "Пустой поисковый запрос.",
-                "action": "web_search"}
-    try:
-        body = http_get(
-            "https://html.duckduckgo.com/html/?q=" + urllib.parse.quote(q)
-        )
-        results = parse_ddg_html(body)
-    except Exception:  # noqa: BLE001 — нет сети/капча: не роняем инструмент
-        results = []
-
-    if results:
-        return {
-            "success": True,
-            "query": q,
-            "results": results,
-            "message": f"Нашёл {len(results)} результатов по «{q}».",
-            "action": "web_search",
-        }
-
-    # Фолбэк: открываем поиск в браузере — как голосовая «погугли».
-    url = "https://duckduckgo.com/?q=" + urllib.parse.quote(q)
-    try:
-        webbrowser.open(url)
-    except Exception:  # noqa: BLE001
-        return {"success": False, "message": "Не удалось открыть браузер.",
-                "action": "web_search"}
-    return {
-        "success": True,
-        "query": q,
-        "results": [],
-        "url": url,
-        "message": "Парсер выдачи не сработал — открыл поиск в браузере.",
-        "action": "web_search",
-    }
+    """Веб-поиск через общий эффект (тот же разбор выдачи и открывалка ссылок)."""
+    from core.command_effects import search_web
+    return search_web(query, fetch=http_get, opener=webbrowser.open)
 
 
 def _tool_open_url(url: str) -> dict[str, Any]:
-    """Открывает http/https-ссылку в браузере."""
-    target = str(url or "").strip()
-    if not target.lower().startswith(("http://", "https://")):
-        return {"success": False,
-                "message": "Открывать можно только http/https-ссылки.",
-                "action": "open_url"}
-    try:
-        webbrowser.open(target)
-    except Exception as exc:  # noqa: BLE001
-        return {"success": False, "message": f"Не открылось: {exc}",
-                "action": "open_url"}
-    return {"success": True, "message": f"Открыл {target}.", "action": "open_url"}
+    """Открывает http/https-ссылку той же функцией, что и голосовой поиск."""
+    from core.command_effects import open_url
+    return open_url(url, opener=webbrowser.open)
 
 
 # ---------------------------------------------------------------------------

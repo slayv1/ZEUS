@@ -12,7 +12,12 @@ from src.ui.main_flet import ZeusUI  # noqa: E402
 
 def test_hologram_uses_webp_source():
     """Источник визуализатора должен быть hologram.webp, а не .gif."""
-    src = inspect.getsource(ZeusUI)
+    parts = []
+    for cls in ZeusUI.__mro__:
+        if cls is object:
+            continue
+        parts.append(inspect.getsource(cls))
+    src = "\n".join(parts)
     assert "hologram.webp" in src, "hologram.webp должен использоваться"
     assert "hologram.gif" not in src, "hologram.gif не должен оставаться"
 

@@ -15,6 +15,7 @@ pystray/PIL подменяются фейками, ZeusUI создаётся б�
 import sys
 import types
 
+import ui.boot as boot
 import src.ui.main_flet as mf
 from modules.tray import TrayManager
 
@@ -271,7 +272,7 @@ def test_start_tray_wires_menu_actions(monkeypatch):
             super().__init__(**kwargs)
             created.update(kwargs)
 
-    monkeypatch.setattr(mf, "TrayManager", RecordingTray)
+    monkeypatch.setattr(boot, "TrayManager", RecordingTray)
     monkeypatch.setattr(ui, "_select_section", lambda idx: sections.append(idx), raising=False)
     monkeypatch.setattr(ui, "_exit_application", lambda: exits.append(1), raising=False)
 
@@ -300,7 +301,7 @@ def test_start_tray_failure_leaves_no_tray(monkeypatch):
     """DoD №5: трей не стартовал -> _tray=None, крестик завершает приложение."""
     ui = make_ui()
     monkeypatch.setattr(
-        mf, "TrayManager", lambda **kw: FakeTray(**kw, start_result=False)
+        boot, "TrayManager", lambda **kw: FakeTray(**kw, start_result=False)
     )
     ui._start_tray()
     assert ui._tray is None
@@ -361,7 +362,7 @@ def test_init_file_watcher_intercepts_close(monkeypatch):
     из-за чего событие закрытия не доходило и окно нельзя было закрыть.
     """
     ui = make_ui()
-    monkeypatch.setattr(mf, "start_watching", lambda callback=None: True)
+    monkeypatch.setattr(boot, "start_watching", lambda callback=None: True)
     ui._init_file_watcher()
     assert ui.page.window.prevent_close is True
     assert ui.page.window.on_event == ui._on_window_event
@@ -461,7 +462,7 @@ def test_shutdown_background_services_stops_everything(monkeypatch):
     ui._tray = FakeTray()
     ui._watcher_started = True
     watcher_stops = []
-    monkeypatch.setattr(mf, "stop_watching", lambda: watcher_stops.append(1))
+    monkeypatch.setattr(boot, "stop_watching", lambda: watcher_stops.append(1))
     tray = ui._tray
 
     ui._shutdown_background_services()
@@ -481,7 +482,7 @@ def test_shutdown_background_services_stops_hotkeys(monkeypatch):
             hotkey_stops.append(1)
 
     ui._hotkey = FakeHotkey()
-    monkeypatch.setattr(mf, "stop_watching", lambda: None)
+    monkeypatch.setattr(boot, "stop_watching", lambda: None)
 
     ui._shutdown_background_services()
 
@@ -493,7 +494,7 @@ def test_shutdown_background_services_is_idempotent(monkeypatch):
     ui = make_ui()
     ui._tray = FakeTray()
     ui._watcher_started = True
-    monkeypatch.setattr(mf, "stop_watching", lambda: None)
+    monkeypatch.setattr(boot, "stop_watching", lambda: None)
 
     ui._shutdown_background_services()
     ui._shutdown_background_services()  # повторный вызов не падает
@@ -508,7 +509,7 @@ def test_close_event_with_exit_requested_shuts_down(monkeypatch):
     ui._watcher_started = True
     ui._exit_requested = True
     watcher_stops = []
-    monkeypatch.setattr(mf, "stop_watching", lambda: watcher_stops.append(1))
+    monkeypatch.setattr(boot, "stop_watching", lambda: watcher_stops.append(1))
 
     ui._on_window_event(FakeEvent("close"))
 
@@ -524,7 +525,7 @@ def test_close_event_twice_with_exit_requested_does_not_crash(monkeypatch):
     ui = make_ui()
     ui._tray = FakeTray()
     ui._exit_requested = True
-    monkeypatch.setattr(mf, "stop_watching", lambda: None)
+    monkeypatch.setattr(boot, "stop_watching", lambda: None)
 
     ui._on_window_event(FakeEvent("close"))
     ui._on_window_event(FakeEvent("close"))  # без исключений и без зацикливания
@@ -539,7 +540,7 @@ def test_exit_application_full_lifecycle(monkeypatch):
     ui._tray = FakeTray()
     ui._watcher_started = True
     watcher_stops = []
-    monkeypatch.setattr(mf, "stop_watching", lambda: watcher_stops.append(1))
+    monkeypatch.setattr(boot, "stop_watching", lambda: watcher_stops.append(1))
 
     ui._exit_application()
 
@@ -672,9 +673,9 @@ class TestTrayToController:
             kwargs.update(kw)
             return FakeAudioTray()
 
-        monkeypatch.setattr(mf, "TrayManager", fake_tr_manager)
+        monkeypatch.setattr(boot, "TrayManager", fake_tr_manager)
         monkeypatch.setattr(
-            mf, "config", types.SimpleNamespace(resource_path=lambda p: p)
+            boot, "config", types.SimpleNamespace(resource_path=lambda p: p)
         )
 
         mf.ZeusUI._start_tray(ui)

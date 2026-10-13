@@ -29,6 +29,7 @@ from core.chat_engine import ChatEngine
 from core import config
 from core import actions
 from core import file_scanner
+from core.assistant_state import ZeusStateController
 from core.command_router import router
 # log() используется в аудио-диагностике (Спринт 1: [AUDIO]-строки в терминал).
 # Раньше модуль вызывал log() без импорта — NameError при переключении
@@ -50,6 +51,15 @@ def _register_default_commands() -> None:
     if not router.has("run_command"):
         # Универсальный прогон текста через actions (системная команда или LLM).
         router.register("run_command", actions.execute_command)
+    from core import command_effects
+    for _name, _handler in (
+        ("open_url", command_effects.open_url),
+        ("web_search", command_effects.search_web),
+        ("launch_app", command_effects.launch_named),
+        ("close_app", command_effects.close_named),
+    ):
+        if not router.has(_name):
+            router.register(_name, _handler)
 
 
 # Регистрация на уровне модуля: достаточно импортировать controller,
@@ -76,8 +86,8 @@ def execute_command_safely(command_func, *args, **kwargs):
             command_func(*args, **kwargs)
         except Exception as exc:  # noqa: BLE001
             import traceback
-            print(f"[Error] Ошибка при выполнении команды: {exc}")
-            traceback.print_exc()
+            from core.logging_service import error
+            error(f"[Controller] фоновая команда: {exc}\n{traceback.format_exc()}")
 
     try:
         _SAFE_CMD_EXECUTOR.submit(worker)
@@ -174,12 +184,19 @@ class ZeusController:
         )
         self._cmd_thread.start()
 
+        # Пустая база команд на новой машине — из шаблона, не из чужого снимка.
+        try:
+            actions.ensure_commands_file()
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] база команд: {exc}")
+
         # Инициализация движков
         voice = self.settings.get("voice_settings", {})
         self.audio = AudioEngine(
             language=voice.get("language", "ru-RU"),
             mic_index=voice.get("mic_index"),
         )
+        self.audio.on_speaking_changed = self._on_speaking_changed
         self.chat = ChatEngine()
 
         # Регистрируем голосовое уведомление о системных ошибках (Crash Handler).
@@ -188,8 +205,8 @@ class ZeusController:
         try:
             from core import crash_handler
             crash_handler.set_crash_notifier(self.audio.speak)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] crash_handler не подключился: {exc}")
 
         # Применяем настройки к движкам
         self._apply_settings()
@@ -206,8 +223,8 @@ class ZeusController:
             watcher.register_reload("commands.json", actions.reload_commands)
             watcher.start()
             self._watcher = watcher
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] наблюдатель commands.json не запустился: {exc}")
 
         # Наблюдатель горячего подключения аудиоустройств (hot-plug).
         # Колбэки on_device_added / on_device_removed_with_info обновляют
@@ -230,8 +247,8 @@ class ZeusController:
             )
             dw.start()
             self._device_watcher = dw
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] наблюдатель аудиоустройств не запустился: {exc}")
 
         # Фоновый авто-сканер новых игр/приложений (рабочий стол + Steam).
         # Периодически дописывает найденное в commands.json; watchdog тут же
@@ -240,14 +257,17 @@ class ZeusController:
             if self.settings.get("app_settings", {}).get("auto_scan", True):
                 from core import auto_scanner
                 auto_scanner.auto_scan_in_background(interval=300)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] автосканер не запустился: {exc}")
 
         # Спящий режим
         self.is_active = True
 
-        # Конечный автомат голосового потока
-        self.state = "IDLE"  # IDLE, LISTENING, PROCESSING
+        # Конечный автомат голосового потока. Строка self.state — язык
+        # микрофона; state_controller — тот же автомат для голограммы и кнопок.
+        self.state = "IDLE"  # IDLE, LISTENING, PROCESSING, SPEAKING, ERROR
+        self.state_controller = ZeusStateController()
+        self._after_speech: str | None = None
 
         # Голосовое управление из настроек
         app_settings = self.settings.get("app_settings", {})
@@ -556,10 +576,10 @@ class ZeusController:
 
         if active and not was_active and confirm:
             # Короткое аудио-подтверждение активации
-            self.audio.speak("Да, сэр.")
+            self._speak("Да, сэр.")
         elif not active and was_active and confirm:
             # Короткое подтверждение отключения
-            self.audio.speak("Есть, сэр.")
+            self._speak("Есть, сэр.")
 
         status = "активирован" if active else "отключён (спящий режим)"
         self._set_status(f"Зевс {status}")
@@ -672,10 +692,11 @@ class ZeusController:
                 break
             try:
                 try:
-                    command_result = actions.execute_command(text)
+                    command_result = router.call("run_command", text)
                 except Exception as e:  # noqa: BLE001
                     import traceback
-                    traceback.print_exc()
+                    log(f"[Controller] Ошибка команды: {traceback.format_exc()}")
+                    self._transition_state("ERROR")
                     command_result = {
                         "success": False,
                         "message": f"Ошибка выполнения команды: {e}",
@@ -704,7 +725,8 @@ class ZeusController:
                     # убивать поток-потребитель: иначе ассистент навсегда
                     # перестанет реагировать на последующие команды.
                     import traceback
-                    traceback.print_exc()
+                    log(f"[Controller] Доставка результата: {traceback.format_exc()}")
+                    self._transition_state("ERROR")
             finally:
                 try:
                     self._cmd_queue.task_done()
@@ -730,20 +752,21 @@ class ZeusController:
         try:
             if hasattr(self.audio, "stop_speaking"):
                 self.audio.stop_speaking()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] не остановил озвучку: {exc}")
         try:
             from modules.tts_piper import set_stop
             set_stop()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            log(f"[Controller] не остановил Piper: {exc}")
         # Сбрасываем состояние сразу (без ожидания таймеров)
         self._pending_follow_up = False
         self._cancel_followup_watchdog()
         self._cancel_follow_up_timer()
         self._cancel_idle_return_timer()
         self._cancel_session_retry()
-        self._transition_state("IDLE")
+        self._after_speech = None
+        self._transition_state("IDLE", force=True)
         self._set_status("Ожидание «Зевс»...")
         self._switch_audio_mode("wake")
 
@@ -784,14 +807,50 @@ class ZeusController:
     # ------------------------------------------------------------------
     # Конечный автомат голосового потока
     # ------------------------------------------------------------------
-    def _transition_state(self, state: str):
-        """Переводит конечный автомат в новое состояние и уведомляет UI."""
+    def _transition_state(self, state: str, *, force: bool = False):
+        """Переводит конечный автомат и тот же ZeusStateController, что у UI.
+
+        Пока идёт озвучка, переход в IDLE/LISTENING откладывается:
+        голограмма остаётся в SPEAKING, пока движок не закончит фразу.
+        """
+        audio = getattr(self, "audio", None)
+        speaking = bool(getattr(audio, "is_speaking", False))
+        if speaking and not force and state != "SPEAKING":
+            self._after_speech = state
+            if self.state == "SPEAKING":
+                return
+            state = "SPEAKING"
+        if state == self.state and not force:
+            sc = getattr(self, "state_controller", None)
+            if sc is not None:
+                sc.apply_voice(state)
+            return
         self.state = state
+        sc = getattr(self, "state_controller", None)
+        if sc is not None:
+            sc.apply_voice(state)
         if getattr(self, "on_state", None):
             try:
                 self.on_state(state)
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                log(f"[Controller] on_state: {exc}")
+
+    def _on_speaking_changed(self, speaking: bool) -> None:
+        """Движок TTS включил или выключил речь — общее состояние SPEAKING."""
+        if speaking:
+            if self.state != "SPEAKING":
+                self._after_speech = self.state
+                self._transition_state("SPEAKING", force=True)
+            return
+        nxt = self._after_speech
+        self._after_speech = None
+        if self.state == "SPEAKING" and nxt and nxt != "SPEAKING":
+            self._transition_state(nxt, force=True)
+
+    def _speak(self, text: str) -> None:
+        """Ставит фразу в очередь озвучки. SPEAKING выставляет движок TTS."""
+        if text:
+            self.audio.speak(text)
 
     def _on_wake_word(self):
         """Wake Word «Зевс»: IDLE -> LISTENING («Да, сэр?»).
@@ -815,7 +874,7 @@ class ZeusController:
         self._transition_state("LISTENING")
         self._set_status("Да, сэр?")
         sfx.play_activation()
-        self.audio.speak("Да, сэр?")
+        self._speak("Да, сэр?")
         # Микрофон -> полное распознавание команды
         self._switch_audio_mode("command")
         self._log_session("WAKE", "Ключевое слово «Зевс» распознано", source="voice")
@@ -838,7 +897,7 @@ class ZeusController:
         self._session_active_until = time.time() + self._min_active_session
         self._cancel_follow_up_timer()
         self._transition_state("PROCESSING")
-        self.audio.speak("Выполняю.")
+        self._speak("Выполняю.")
         # Окно уточнений откроется ПОСЛЕ фактического исполнения команды —
         # см. _finish_voice_command(): из _command_loop (системная команда)
         # или из _on_chat_complete/_on_chat_error (ответ LLM).
@@ -1026,7 +1085,7 @@ class ZeusController:
 
         # Озвучиваем ответ
         if message:
-            self.audio.speak(message)
+            self._speak(message)
 
         # SFX: звук успеха/ошибки в стиле «Железного человека»
         if success:
@@ -1056,7 +1115,7 @@ class ZeusController:
 
         message = result.get("message", "")
         if message and speak:
-            self.audio.speak(message)
+            self._speak(message)
         self._set_status(message)
 
     # ------------------------------------------------------------------
@@ -1093,7 +1152,7 @@ class ZeusController:
             self.on_chat_complete(full_text)
 
         # Озвучиваем ответ и проигрываем звук успеха
-        self.audio.speak(full_text)
+        self._speak(full_text)
         sfx.play_success()
         self._log_session("LLM_OK", full_text[:200], source="llm", action="chat")
         # Ответ LLM получен и озвучен — только теперь окно уточнений / IDLE.
@@ -1101,6 +1160,9 @@ class ZeusController:
 
     def _on_chat_error(self, error: str):
         """Обработчик ошибки LLM."""
+        log(f"[Controller] ошибка LLM: {error}")
+        if self.state == "PROCESSING":
+            self._transition_state("ERROR")
         self._set_status(f"Ошибка: {error}")
         sfx.play_error()
 
@@ -1130,7 +1192,7 @@ class ZeusController:
                     else:
                         msg = f"На {drive} не найдено исполняемых файлов, сэр."
                     self._set_status(msg)
-                    self.audio.speak(msg)
+                    self._speak(msg)
                     if self.on_system_command:
                         self.on_system_command({
                             "success": True,
@@ -1412,7 +1474,7 @@ class ZeusController:
 
     def speak(self, text: str):
         """Произносит текст."""
-        self.audio.speak(text)
+        self._speak(text)
 
     def force_activate(self):
         """Принудительный вызов ассистента (для глобальной горячей клавиши).
@@ -1430,7 +1492,7 @@ class ZeusController:
             self._on_wake_word()
         else:
             self._set_status("Да, сэр?")
-            self.audio.speak("Да, сэр?")
+            self._speak("Да, сэр?")
 
     def deactivate_from_hotkey(self):
         """Принудительное отключение ассистента по горячей клавише."""

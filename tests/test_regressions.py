@@ -1,6 +1,6 @@
 import tempfile
 
-from core import actions
+from core import actions, actions_search
 from core.file_watcher import FileWatcher
 from modules.audio_engine import ModelLoaderThread
 
@@ -12,7 +12,7 @@ def test_date_parser_does_not_capture_unrelated_today_question():
 
 def test_drive_scan_response_uses_words_instead_of_substrings(monkeypatch):
     # monkeypatch — чтобы глобальное состояние не утекало в другие тесты
-    monkeypatch.setattr(actions, "_pending_drive_scan", "E:")
+    monkeypatch.setattr(actions_search, "_pending_drive_scan", "E:")
     assert actions._handle_drive_scan_response("интернет")["action"] == "drive_scan_clarify"
     assert actions._handle_drive_scan_response("давай")["action"] == "drive_scan_clarify"
 

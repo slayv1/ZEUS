@@ -10,7 +10,7 @@ import time
 
 import pytest
 
-from core import actions
+from core import actions, actions_search
 from modules import weather
 
 
@@ -22,7 +22,7 @@ def no_pending_drive_scan(monkeypatch):
     флешки), execute_command вернёт переспрос вместо разбора нашей команды.
     Изоляция явная — тесты не зависят от порядка выполнения.
     """
-    monkeypatch.setattr(actions, "_pending_drive_scan", None)
+    monkeypatch.setattr(actions_search, "_pending_drive_scan", None)
 
 
 @pytest.fixture
