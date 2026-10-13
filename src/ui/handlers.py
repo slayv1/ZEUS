@@ -65,7 +65,8 @@ class ZeusHandlersMixin:
             is_selected = (i == index)
             # Баг-фикс: используем единый метод build_nav_item
             new_btn = _sidebar.build_nav_item(
-                section["icon"], section["label"], is_selected, C
+                section["icon"], section["label"], is_selected, C,
+                compact=bool(getattr(self, "_sidebar_compact", False)),
             )
             new_btn.data = i
             new_btn.on_click = lambda e: self._select_section(int(e.control.data))

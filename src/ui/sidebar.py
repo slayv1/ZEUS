@@ -28,7 +28,7 @@ SECTIONS: list[dict] = [
 ]
 
 
-def build_logo(palette: dict[str, str], icon_src: str | None = None) -> ft.Row:
+def build_logo(palette: dict[str, str], icon_src: str | None = None, compact: bool = False) -> ft.Control:
     """Логотип ⚡ ZEUS v1.4: иконка 52x52 с синим glow + текст."""
     accent = palette.get("accent", "#2563EB")
     if icon_src:
@@ -47,6 +47,8 @@ def build_logo(palette: dict[str, str], icon_src: str | None = None) -> ft.Row:
         border=ft.Border.all(1, ft.Colors.with_opacity(0.35, accent)),
         shadow=ft.BoxShadow(blur_radius=18, spread_radius=1, color=ft.Colors.with_opacity(0.45, accent)),
     )
+    if compact:
+        return logo_icon
     return ft.Row(
         [
             logo_icon,
@@ -67,10 +69,20 @@ def build_nav_item(
     label: str,
     selected: bool,
     palette: dict[str, str],
+    compact: bool = False,
 ) -> ft.Container:
     """Пункт меню: выбранный — акцентная заливка, иначе прозрачный + hover."""
     accent = palette.get("accent", "#2563EB")
     text_color = "#FFFFFF" if selected else palette.get("text_dim", "#64748B")
+    if compact:
+        return ft.Container(
+            content=ft.Icon(icon, size=20, color=text_color),
+            padding=10,
+            border_radius=10,
+            bgcolor=ft.Colors.with_opacity(0.9, accent) if selected else ft.Colors.TRANSPARENT,
+            alignment=ft.Alignment.CENTER,
+            tooltip=label,
+        )
     return ft.Container(
         content=ft.Row(
             [
@@ -86,9 +98,19 @@ def build_nav_item(
     )
 
 
-def build_status_footer(palette: dict[str, str]) -> ft.Container:
+def build_status_footer(palette: dict[str, str], compact: bool = False) -> ft.Container:
     """Низ сайдбара: пульс-сигнал + 'Система активна' (ТЗ: премиальный минимум)."""
     green = palette.get("green", "#22C55E")
+    if compact:
+        return ft.Container(
+            content=ft.Container(
+                width=9, height=9, border_radius=5, bgcolor=green,
+                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=green),
+            ),
+            padding=10,
+            alignment=ft.Alignment.CENTER,
+            tooltip="Система активна",
+        )
     return ft.Container(
         content=ft.Row(
             [

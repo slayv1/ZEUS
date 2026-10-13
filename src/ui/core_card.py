@@ -34,6 +34,7 @@ def build_core_card(
     plugins: str = "5 загружено",
     online: bool = True,
     transparent: bool = False,
+    fit: bool = False,
 ) -> ft.Control:
     """Карточка ZEUS CORE для главной страницы.
 
@@ -74,4 +75,6 @@ def build_core_card(
     )
     if transparent:
         return body
+    if fit:
+        return card(body, palette)
     return card(body, palette, width=CORE_CARD_WIDTH, height=CORE_CARD_HEIGHT)

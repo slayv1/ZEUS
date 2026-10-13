@@ -72,42 +72,8 @@ class ZeusLayoutMixin:
         page.window.prevent_close = True
         page.padding = 0
 
-        # Адаптивный ресайз: подстраиваем голограмму и layout под размер окна.
-        # Голограмма уменьшена: GIF в пределах [220, 360] внутри сферы 360px.
         def on_resized(e):
-            w = page.window.width or 1380
-            h = page.window.height or 860
-            # Голограмма: компактная сфера ~26% ширины / ~42% высоты окна
-            new_size = max(220, min(360, int(min(w * 0.26, h * 0.42))))
-            if getattr(self, "holo_image", None):
-                self.holo_image.width = new_size
-                self.holo_image.height = new_size
-                try:
-                    self.holo_image.update()
-                except RuntimeError:
-                    pass
-            # Терминал: на маленьких экранах — 150px, на больших — до 260px
-            terminal_h = max(150, min(260, int(h * 0.28)))
-            if getattr(self, "_log_container", None):
-                self._log_container.height = terminal_h
-                try:
-                    self._log_container.update()
-                except RuntimeError:
-                    pass
-            # Перестраиваем main_row при пересечении порога 1100px
-            dashboard = getattr(self, "dashboard_content", None)
-            left = getattr(self, "_left_panel", None)
-            center_ctrl = getattr(self, "_center", None)
-            right = getattr(self, "_right_panel", None)
-            if dashboard and left and center_ctrl and right:
-                new_row = self._build_adaptive_main_row(left, center_ctrl, right, w)
-                try:
-                    col = dashboard.content
-                    if isinstance(col, ft.Column) and len(col.controls) > 2:
-                        col.controls[2] = new_row
-                        dashboard.update()
-                except (RuntimeError, IndexError, AttributeError):
-                    pass
+            self._apply_home_layout()
 
         page.on_resized = on_resized
 
@@ -197,58 +163,191 @@ class ZeusLayoutMixin:
                 f"{'активен' if self.controller.audio.wake.available else 'недоступен (в Sleep микрофон молчит)'}"
             )
         self._log(f"Ollama: {'доступна' if self.controller.chat.is_available() else 'недоступна'}")
+        self._apply_home_layout()
 
 
+
+    def _window_box(self) -> tuple[int, int]:
+        page = getattr(self, "page", None)
+        window = getattr(page, "window", None) if page is not None else None
+        width = int(getattr(window, "width", None) or 1380)
+        height = int(getattr(window, "height", None) or 860)
+        return max(width, 480), max(height, 480)
+
+    def _frame_metrics(self, window_w: int) -> tuple[str, bool, int, int]:
+        """Режим главной, узкий сайдбар, его ширина и отступ контента.
+
+        Ширина считается по рабочей зоне, без сайдбара: карточки не должны
+        наезжать на сферу, когда окно уже монитора.
+        """
+        compact = window_w < 980
+        side = 76 if compact else _sidebar.SIDEBAR_WIDTH
+        pad = 12 if window_w < 820 else (20 if window_w < 1200 else 32)
+        content = window_w - side - pad * 2
+        if content >= 1080:
+            mode = "wide"
+        elif content >= 700:
+            mode = "medium"
+        else:
+            mode = "narrow"
+        return mode, compact, side, pad
+
+    def _sphere_size(self, mode: str, window_w: int, window_h: int, side: int, pad: int) -> int:
+        content = max(280, window_w - side - pad * 2)
+        if mode == "wide":
+            raw = min(content * 0.34, window_h * 0.42)
+        elif mode == "medium":
+            raw = min(content * 0.46, window_h * 0.36)
+        else:
+            raw = min(content * 0.78, window_h * 0.34)
+        return max(220, min(460, int(raw)))
+
+    def _sync_sidebar(self, compact: bool, side: int) -> None:
+        sidebar = getattr(self, "sidebar", None)
+        if sidebar is None:
+            return
+        sidebar.width = side
+        if getattr(self, "_sidebar_compact", None) == compact and self._nav_buttons:
+            try:
+                sidebar.update()
+            except RuntimeError:
+                pass
+            return
+        self._sidebar_compact = compact
+        self._nav_buttons = []
+        for i, section in enumerate(SECTIONS):
+            btn = _sidebar.build_nav_item(
+                section["icon"], section["label"], i == self.selected_index, C, compact=compact,
+            )
+            btn.data = i
+            btn.on_click = lambda e: self._select_section(int(e.control.data))
+            btn.on_hover = lambda e: self._nav_hover(e, int(e.control.data) == self.selected_index)
+            self._nav_buttons.append(btn)
+        column = sidebar.content
+        if isinstance(column, ft.Column):
+            column.controls = [
+                _sidebar.build_logo(C, compact=compact),
+                ft.Container(height=8),
+                *self._nav_buttons,
+                ft.Container(expand=True),
+                _sidebar.build_status_footer(C, compact=compact),
+            ]
+        try:
+            sidebar.update()
+        except RuntimeError:
+            pass
+
+    def _rebuild_center(self, size: int) -> None:
+        """Пересобирает сферу под новую ширину, не теряя ту же голограмму."""
+        previous = getattr(self, "_center", None)
+        if isinstance(previous, ft.Column):
+            inner = previous.controls[0] if previous.controls else None
+            if isinstance(inner, ft.Stack):
+                for layer in inner.controls:
+                    if getattr(layer, "content", None) is self.holo_container:
+                        layer.content = ft.Container()
+        status = "Готов к работе"
+        sub = "Слушаю..."
+        if getattr(self, "_neural_status_text", None) is not None:
+            status = self._neural_status_text.value or status
+            sub = self._neural_sub_text.value or sub
+        if getattr(self, "holo_image", None) is not None:
+            self.holo_image.width = int(size * 0.72)
+            self.holo_image.height = int(size * 0.72)
+        center = _neural_core.build_neural_core(
+            self.holo_container, status, sub, C, size=size, globe=True,
+        )
+        self._center = center
+        self._neural_status_text = center.status_text
+        self._neural_sub_text = center.sub_text
+        self._sphere_size_applied = size
+
+    def _apply_home_layout(self) -> None:
+        """Подгоняет сайдбар, отступы, сферу и колонки под текущее окно."""
+        if not getattr(self, "_left_panel", None) or not getattr(self, "_main_slot", None):
+            return
+        window_w, window_h = self._window_box()
+        mode, compact, side, pad = self._frame_metrics(window_w)
+        self._layout_mode = mode
+        self._sync_sidebar(compact, side)
+
+        if getattr(self, "content_area", None) is not None:
+            self.content_area.padding = pad
+        if getattr(self, "page_title", None) is not None:
+            self.page_title.size = 22 if window_w < 760 else (26 if window_w < 1100 else 32)
+
+        sphere = self._sphere_size(mode, window_w, window_h, side, pad)
+        if abs(sphere - int(getattr(self, "_sphere_size_applied", 0))) >= 24:
+            self._rebuild_center(sphere)
+
+        self._left_panel.width = 300 if mode == "wide" else None
+        self._left_panel.expand = mode == "medium"
+        self._right_panel.width = 340 if mode == "wide" else None
+        self._right_panel.expand = mode == "medium"
+
+        self._main_slot.content = self._build_adaptive_main_row(
+            self._left_panel, self._center, self._right_panel, mode,
+        )
+        terminal_h = 140 if mode == "narrow" else max(160, min(240, int(window_h * 0.24)))
+        if getattr(self, "_log_container", None) is not None:
+            self._log_container.height = terminal_h
+        for control in (
+            self.sidebar, self.content_area, self.page_title,
+            self._main_slot, getattr(self, "_log_container", None),
+        ):
+            if control is None:
+                continue
+            try:
+                control.update()
+            except RuntimeError:
+                pass
 
     def _build_adaptive_main_row(
         self,
         left_panel: ft.Column,
         center: ft.Column,
         right_panel: ft.Column,
-        page_width: int = 1380,
+        page_width: int | str = 1380,
     ) -> ft.Row | ft.Column:
-        """Адаптивный layout: 3 колонки на широких экранах, 1 колонка на узких.
-
-        При ширине < 1100px переключается в одноколоночный режим с scroll —
-        на маленьких экранах панели идут вертикально, чтобы не накладываться.
-        """
-        if page_width >= 1100:
-            # Широкий экран: 3 колонки в ряд
+        """Три колонки, сфера сверху или одна колонка — по ширине рабочей зоны."""
+        mode = page_width if isinstance(page_width, str) else (
+            "wide" if int(page_width) >= 1280 else ("medium" if int(page_width) >= 980 else "narrow")
+        )
+        center_box = ft.Container(
+            content=center,
+            expand=mode == "wide",
+            alignment=ft.Alignment.CENTER,
+        )
+        if mode == "wide":
             return ft.Row(
-                [
-                    left_panel,
-                    ft.Container(
-                        content=center,
-                        expand=True,
-                        alignment=ft.Alignment.CENTER,
-                        padding=ft.Padding.symmetric(horizontal=8),
-                    ),
-                    right_panel,
-                ],
+                [left_panel, center_box, right_panel],
                 spacing=14,
                 vertical_alignment=ft.CrossAxisAlignment.START,
                 expand=True,
             )
-        else:
-            # Узкий экран: одна колонка с адаптивными ширинами
-            left_panel.expand = True
-            right_panel.expand = True
+        if mode == "medium":
             return ft.Column(
                 [
-                    left_panel,
-                    ft.Container(height=10),
-                    ft.Container(
-                        content=center,
-                        alignment=ft.Alignment.CENTER,
-                        padding=ft.Padding.symmetric(vertical=16),
+                    center_box,
+                    ft.Container(height=8),
+                    ft.Row(
+                        [left_panel, right_panel],
+                        spacing=12,
+                        vertical_alignment=ft.CrossAxisAlignment.START,
                     ),
-                    ft.Container(height=10),
-                    right_panel,
                 ],
                 spacing=0,
-                expand=True,
                 scroll=ft.ScrollMode.AUTO,
+                expand=True,
             )
+        left_panel.expand = True
+        right_panel.expand = True
+        return ft.Column(
+            [center_box, ft.Container(height=8), left_panel, ft.Container(height=8), right_panel],
+            spacing=0,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
 
 
 
@@ -637,16 +736,15 @@ class ZeusLayoutMixin:
                 _core_card.build_core_card(
                     C, model=model_name,
                     voice_engine="Vosk", memory="Активна", plugins="5 загружено",
-                    online=True,
+                    online=True, fit=True,
                 ),
             ],
             spacing=6,
-            width=300,
         )
 
         # Центр — светящаяся сфера с подписью ZEUS / NEURAL CORE.
         center = _neural_core.build_neural_core(
-            self.holo_container, "Готов к работе", "Слушаю...", C, size=440, globe=True,
+            self.holo_container, "Готов к работе", "Слушаю...", C, size=400, globe=True,
         )
         self._neural_status_text = center.status_text
         self._neural_sub_text = center.sub_text
@@ -657,31 +755,28 @@ class ZeusLayoutMixin:
         right_panel = ft.Column(
             [
                 _system_panel.build_system_panel(
-                    C, cpu=snap["cpu"], ram=snap["ram"], disk=snap["disk"],
+                    C, cpu=snap["cpu"], ram=snap["ram"], disk=snap["disk"], fit=True,
                 ),
                 _system_panel.build_quick_actions(
-                    C, on_action=self._on_quick_action,
+                    C, on_action=self._on_quick_action, fit=True,
                 ),
                 _system_panel.build_recent_commands(
-                    C, items=self._recent_commands(limit=5),
+                    C, items=self._recent_commands(limit=5), fit=True,
                 ),
             ],
             spacing=12,
-            width=340,
         )
         self._right_column = right_panel
         self._left_panel = left_panel
         self._center = center
         self._right_panel = right_panel
 
-        # Адаптивный layout: 3 колонки на широких экранах, 1 колонка на узких
-        page_w = self.page.window.width if self.page and self.page.window else 1380
-        main_row = self._build_adaptive_main_row(left_panel, center, right_panel, page_w)
-
+        self._sphere_size_applied = 400
+        self._main_slot = ft.Container(expand=True)
         controls = ft.Container(
             content=ft.Column(
                 [
-                    main_row,
+                    self._main_slot,
                     ft.Container(height=10),
                     terminal_header,
                     log_container,

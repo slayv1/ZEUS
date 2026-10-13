@@ -35,6 +35,7 @@ def build_system_panel(
     voice: str = "Ready",
     ai_model: str = "Connected",
     transparent: bool = False,
+    fit: bool = False,
 ) -> ft.Control:
     """System Status: CPU/RAM/Disk бары + Voice/AI строки.
 
@@ -46,11 +47,13 @@ def build_system_panel(
     green = palette.get("green", "#22C55E")
 
     def _metric(icon: ft.IconData, name: str, value: float) -> ft.Row:
+        bar = progress_bar(value, palette, width=120)
+        bar.expand = True
         return ft.Row(
             [
                 ft.Icon(icon, size=15, color=dim),
                 ft.Text(name, size=12, color=dim, width=44),
-                progress_bar(value, palette, width=150),
+                bar,
                 ft.Text(f"{int(round(value * 100))}%", size=12, color=text, width=42, text_align=ft.TextAlign.RIGHT),
             ],
             spacing=8,
@@ -82,6 +85,8 @@ def build_system_panel(
     )
     if transparent:
         return body
+    if fit:
+        return card(body, palette)
     return card(body, palette, width=SYSTEM_PANEL_WIDTH, height=SYSTEM_PANEL_HEIGHT)
 
 
@@ -89,6 +94,7 @@ def build_quick_actions(
     palette: dict[str, str],
     on_action=None,
     transparent: bool = False,
+    fit: bool = False,
 ) -> ft.Control:
     """Быстрые действия 2x2: браузер / файл / музыка / VS Code (ТЗ §7).
 
@@ -110,8 +116,8 @@ def build_quick_actions(
                 spacing=7,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            width=QUICK_ACTION_WIDTH,
             height=QUICK_ACTION_HEIGHT,
+            expand=True,
             bgcolor=ft.Colors.with_opacity(0.06, accent),
             border=ft.Border.all(1, ft.Colors.with_opacity(0.25, accent)),
             border_radius=10,
@@ -139,6 +145,7 @@ def build_recent_commands(
     palette: dict[str, str],
     items: list[tuple[str, str]] | None = None,
     transparent: bool = False,
+    fit: bool = False,
 ) -> ft.Control:
     """Последние команды: время + текст (ТЗ §8).
 
