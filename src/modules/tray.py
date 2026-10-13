@@ -6,6 +6,15 @@ import threading
 from typing import Callable
 
 
+def _tray_log(message: str) -> None:
+    """Пишет сбой трея в zeus.log. Трей не должен ронять окно."""
+    try:
+        from core.logging_service import error
+        error(f"[Tray] {message}")
+    except Exception:
+        pass
+
+
 class TrayManager:
     """Runs a pystray icon without blocking the Flet event loop.
 
@@ -157,7 +166,8 @@ class TrayManager:
         """
         try:
             import pystray
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            _tray_log(f"pystray недоступен: {exc}")
             return ()
 
         with self._devices_lock:
@@ -264,8 +274,8 @@ class TrayManager:
         """pystray setup-колбэк: вызывается в цикле трея после инициализации."""
         try:
             icon.visible = True
-        except Exception:
-            pass
+        except Exception as exc:
+            _tray_log(f"не показал иконку: {exc}")
         self._run_started.set()
 
     def _load_image(self, image_module, draw_module):
@@ -275,8 +285,8 @@ class TrayManager:
                 # (PIL держит файл открытым, пока картинка «ленивая»).
                 with image_module.open(self._icon_path) as img:
                     return img.convert("RGBA")
-            except Exception:
-                pass
+            except Exception as exc:
+                _tray_log(f"не открыл иконку: {exc}")
 
         image = image_module.new("RGBA", (64, 64), (8, 12, 20, 255))
         draw = draw_module.Draw(image)

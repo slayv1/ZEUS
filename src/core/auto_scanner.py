@@ -107,7 +107,7 @@ def _steam_library_roots(steam_path: str) -> list[str]:
     try:
         with open(vdf, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
-        for m in re.finditer(r'"path"\\s+"([^"]+)"', text):
+        for m in re.finditer(r'"path"\s+"([^"]+)"', text):
             p = m.group(1).replace("\\\\", "\\")
             if p and os.path.isdir(p):
                 roots.append(p)
@@ -117,16 +117,63 @@ def _steam_library_roots(steam_path: str) -> list[str]:
 
 
 def _vdf_value(text: str, key: str) -> str | None:
-    m = re.search(r'"' + re.escape(key) + r'"\\s+"([^"]*)"', text)
+    m = re.search(r'"' + re.escape(key) + r'"\s+"([^"]*)"', text)
     return m.group(1).strip() if m else None
 
 
-def _steam_games() -> list[tuple[str, str]]:
-    """Возвращает [(appid, имя_игры)] для всех установленных игр Steam."""
-    games: dict[str, str] = {}
+# Куски StateFlags из appmanifest. Игра попадает в базу, если она уже
+# установлена или прямо сейчас качается/обновляется.
+_STATE_INSTALLED = 4
+_STATE_DOWNLOAD = (
+    2          # нужно обновление
+    | 256      # обновление идёт
+    | 512      # обновление на паузе
+    | 1024     # обновление начато
+    | 262144   # дописываются файлы
+    | 524288   # выделяется место
+    | 1048576  # идёт загрузка
+    | 2097152  # распаковка
+    | 4194304  # запись на диск
+)
+
+
+def app_track_state(
+    flags: str | None,
+    bytes_to: str | None = None,
+    bytes_got: str | None = None,
+) -> str | None:
+    """``installed`` или ``downloading``. None — манифест не игра на диске.
+
+    Неустановленная позиция библиотеки (флаг 1 без загрузки) не добавляется.
+    Манифест без StateFlags оставляем: старые acf так и пишутся.
+    """
+    try:
+        flag = int(flags or "0")
+    except ValueError:
+        flag = 0
+    try:
+        need = int(bytes_to or "0")
+        have = int(bytes_got or "0")
+    except ValueError:
+        need, have = 0, 0
+    downloading = bool(flag & _STATE_DOWNLOAD) or (need > 0 and have < need)
+    if downloading:
+        return "downloading"
+    if flag == 0 or bool(flag & _STATE_INSTALLED):
+        return "installed"
+    return None
+
+
+def _steam_games() -> list[tuple[str, str, str]] | None:
+    """[(appid, имя, состояние)] для скачанных и качающихся игр Steam.
+
+    None — Steam не найден. Пустой список в этом случае стирал бы всю базу,
+    поэтому вызывающий код игры не трогает.
+    """
+    games: dict[str, tuple[str, str]] = {}
     steam = _steam_path()
     if not steam:
-        return []
+        return None
     for root in _steam_library_roots(steam):
         for acf in glob.glob(os.path.join(root, "steamapps", "*.acf")):
             try:
@@ -134,11 +181,16 @@ def _steam_games() -> list[tuple[str, str]]:
                     text = f.read()
                 appid = _vdf_value(text, "appid")
                 name = _vdf_value(text, "name")
-                if appid and name:
-                    games.setdefault(appid, name)
+                state = app_track_state(
+                    _vdf_value(text, "StateFlags"),
+                    _vdf_value(text, "BytesToDownload"),
+                    _vdf_value(text, "BytesDownloaded"),
+                )
+                if appid and name and state:
+                    games.setdefault(appid, (name, state))
             except Exception:  # noqa: BLE001
                 continue
-    return list(games.items())
+    return [(appid, name, state) for appid, (name, state) in games.items()]
 
 
 # === Дубликаты: нечёткое сравнение ===
@@ -183,11 +235,13 @@ _POPULAR_ALIASES = {
     "cs:go": ["контра", "контр страйк", "кс", "кс го"],
     "grand theft auto v": ["гта", "гта 5", "gta 5"],
     "grand theft auto v legacy": ["гта", "гта 5"],
+    "grand theft auto v enhanced": ["гта энхансед", "gta enhanced", "гта 5 энхансед"],
     "watch_dogs 2": ["watch dogs 2", "ватч догс"],
     "tekken 8": ["теккен 8"],
     "tekken 7": ["теккен 7"],
     "far cry 4": ["фар край 4", "фаркрай 4"],
     "marvel rivals": ["марвел ривалс", "марвел"],
+    "the witcher 3": ["ведьмак", "ведьмак 3", "ведьмак три", "witcher", "witcher 3"],
 }
 
 
@@ -213,9 +267,9 @@ def _game_aliases(name: str) -> list[str]:
     """
     aliases: list[str] = []
     low = name.lower()
-    for k, v in _POPULAR_ALIASES.items():
-        if k in low or low in k:
-            aliases.extend(v)
+    matched = [k for k in _POPULAR_ALIASES if k in low or low in k]
+    if matched:
+        aliases.extend(_POPULAR_ALIASES[max(matched, key=len)])
     ru = _latin_to_cyr(name)
     if ru and ru.lower() != low:
         aliases.append(ru)
@@ -229,14 +283,37 @@ def _game_aliases(name: str) -> list[str]:
     return result
 
 
-def _make_game_record(name: str, appid: str) -> dict[str, Any]:
+def _make_game_record(name: str, appid: str, state: str = "installed") -> dict[str, Any]:
     """Создаёт запись игры с полем aliases (русскоязычные синонимы)."""
     return {
         "name": name,
         "type": "steam",
         "id": appid,
+        "state": state,
         "aliases": _game_aliases(name),
     }
+
+
+def _drop_uninstalled_steam(games: dict[str, Any], seen_ids: set[str]) -> list[str]:
+    """Убирает Steam-игры, которых больше нет на диске. Не-Steam не трогает."""
+    removed: list[str] = []
+    for key in list(games):
+        entry = games.get(key)
+        if not isinstance(entry, dict) or entry.get("type") != "steam":
+            continue
+        appid = str(entry.get("id") or "")
+        if appid and appid not in seen_ids:
+            removed.append(str(entry.get("name") or key))
+            del games[key]
+    return removed
+
+
+def _game_key_by_id(games: dict[str, Any], appid: str) -> str | None:
+    """Ключ записи с тем же Steam appid, если она уже есть."""
+    for key, entry in games.items():
+        if isinstance(entry, dict) and str(entry.get("id") or "") == str(appid):
+            return key
+    return None
 
 
 # === Инкрементальное сканирование (по mtime) ===
@@ -255,10 +332,11 @@ def _scan_sources_mtime() -> float:
     steam = _steam_path()
     if steam:
         for root in _steam_library_roots(steam):
-            try:
-                total += os.path.getmtime(root)
-            except OSError:
-                pass
+            for folder in (root, os.path.join(root, "steamapps")):
+                try:
+                    total += os.path.getmtime(folder)
+                except OSError:
+                    pass
     return total
 
 
@@ -279,18 +357,29 @@ def scan_if_needed(force: bool = False) -> dict[str, Any]:
     return res
 
 
-def auto_scan_in_background(interval: int = 300) -> None:
-    """Периодическое инкрементальное сканирование в daemon-потоке (не блокирует UI)."""
+def auto_scan_in_background(interval: int = 30) -> None:
+    """Периодическое инкрементальное сканирование в daemon-потоке (не блокирует UI).
+
+    Полный обход делается только если изменилась папка Steam или рабочий стол.
+    Проверка mtime дешёвая, поэтому интервал короткий: новая загрузка
+    попадает в базу в пределах половины минуты.
+    """
     def _loop() -> None:
         while True:
             try:
                 res = scan_if_needed()
-                if not res.get("skipped") and (res.get("added_apps") or res.get("added_games")):
+                changed = (
+                    res.get("added_apps")
+                    or res.get("added_games")
+                    or res.get("removed_games")
+                    or res.get("updated")
+                )
+                if not res.get("skipped") and changed:
                     from core import actions
                     actions.reload_commands()
             except Exception as e:  # noqa: BLE001
                 print(f"[Scanner] Ошибка фона: {e}")
-            time.sleep(max(30, int(interval)))
+            time.sleep(max(15, int(interval)))
 
     threading.Thread(target=_loop, daemon=True, name="zeus-auto-scanner").start()
 
@@ -312,6 +401,7 @@ def scan_and_update() -> dict[str, Any]:
 
     added_apps: list[str] = []
     added_games: list[str] = []
+    removed_games: list[str] = []
     # Уже попавший в базу мусор (pip, git, установщики) вычищается на каждом скане.
     removed = prune_commands(data)
     updated: bool = bool(removed)
@@ -343,26 +433,47 @@ def scan_and_update() -> dict[str, Any]:
             existing_app_keys.append(name.lower())
             added_apps.append(name)
 
-    # 2. Steam → игры
-    for appid, name in _steam_games():
-        if is_noise_game(name):
-            continue
-        key = name.lower()
-        if key in games:
-            if isinstance(games[key], dict) and not games[key].get("aliases"):
-                games[key]["aliases"] = _game_aliases(name)
-                updated = True
-            continue
-        if _exists_fuzzy(key, existing_game_keys, existing_game_names):
-            continue
-        games[key] = _make_game_record(name, appid)
-        existing_game_keys.append(key)
-        existing_game_names.append(name)
-        added_games.append(name)
+    # 2. Steam → игры. Похожее имя не повод пропускать другой appid:
+    # «GTA V Enhanced» не является копией «GTA V Legacy». Качающаяся
+    # игра добавляется сразу, по манифесту, не дожидаясь конца загрузки.
+    # Если Steam не найден, базу не чистим.
+    live = _steam_games()
+    if live is not None:
+        seen_ids: set[str] = set()
+        for appid, name, state in live:
+            if is_noise_game(name):
+                continue
+            seen_ids.add(str(appid))
+            existing_key = _game_key_by_id(games, appid)
+            if existing_key is not None:
+                entry = games[existing_key]
+                if isinstance(entry, dict):
+                    if entry.get("state") != state:
+                        entry["state"] = state
+                        updated = True
+                    if not entry.get("aliases"):
+                        entry["aliases"] = _game_aliases(name)
+                        updated = True
+                continue
+            key = name.lower()
+            if key in games:
+                key = f"{key} [{appid}]"
+            games[key] = _make_game_record(name, appid, state)
+            existing_game_keys.append(key)
+            existing_game_names.append(name)
+            added_games.append(name)
+        removed_games = _drop_uninstalled_steam(games, seen_ids)
+        if removed_games:
+            updated = True
 
     # Учитываем и добавленные записи, и дополнение алиасов у существующих
-    if added_apps or added_games or updated:
+    if added_apps or added_games or removed_games or updated:
         _save_atomic(data)
 
-    return {"added_apps": added_apps, "added_games": added_games, "updated": updated}
+    return {
+        "added_apps": added_apps,
+        "added_games": added_games,
+        "removed_games": removed_games,
+        "updated": updated,
+    }
 

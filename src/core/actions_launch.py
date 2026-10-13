@@ -921,9 +921,13 @@ def _launch_game(name: str, game: dict[str, Any]) -> dict[str, Any]:
                 subprocess.Popen(["cmd", "/c", "start", "", steam_url], shell=False)
             else:
                 subprocess.Popen(["xdg-open", steam_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if game.get("state") == "downloading":
+                message = f"{display_name} ещё скачивается. Открываю загрузку, сэр."
+            else:
+                message = f"Запускаю {display_name}, сэр."
             return {
                 "success": True,
-                "message": f"Запускаю {display_name}, сэр.",
+                "message": message,
                 "action": "launch_game",
             }
         except Exception as exc:

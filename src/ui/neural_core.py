@@ -66,10 +66,25 @@ def build_neural_core(
         border_radius=16,
         shadow=ft.BoxShadow(blur_radius=24, color=ft.Colors.with_opacity(0.25, accent)),
     )
+    platform = ft.Container(
+        width=int(size * 0.62),
+        height=14,
+        border_radius=20,
+        gradient=ft.LinearGradient(
+            begin=ft.Alignment.CENTER_LEFT,
+            end=ft.Alignment.CENTER_RIGHT,
+            colors=[
+                ft.Colors.with_opacity(0.0, accent),
+                ft.Colors.with_opacity(0.55, accent),
+                ft.Colors.with_opacity(0.0, accent),
+            ],
+        ),
+    )
     column = ft.Column(
         [
             inner,
-            ft.Container(content=pill, alignment=ft.Alignment.CENTER, margin=ft.Margin.only(top=-18)),
+            ft.Container(content=platform, alignment=ft.Alignment.CENTER, margin=ft.Margin.only(top=-8)),
+            ft.Container(content=pill, alignment=ft.Alignment.CENTER, margin=ft.Margin.only(top=10)),
         ],
         spacing=0,
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -162,13 +177,39 @@ def _build_globe(holo_container: ft.Container, palette: dict[str, str], size: in
             )
         )
 
-    # 5) Сама голограмма (центрируется Stack-ом)
+    # 5) Сама голограмма
     holo_wrap = ft.Container(
         content=holo_container,
         width=size, height=size,
         alignment=ft.Alignment.CENTER,
     )
     layers.append(holo_wrap)
+
+    # 6) Подпись в центре сферы, как на референсе
+    layers.append(
+        ft.Container(
+            width=size, height=size,
+            alignment=ft.Alignment.CENTER,
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "ZEUS",
+                        size=max(22, size // 14),
+                        weight=ft.FontWeight.BOLD,
+                        color="#F8FBFF",
+                    ),
+                    ft.Text(
+                        "NEURAL CORE",
+                        size=11,
+                        weight=ft.FontWeight.W_600,
+                        color=ring_c,
+                    ),
+                ],
+                spacing=0,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+        )
+    )
 
     return ft.Stack(
         layers,

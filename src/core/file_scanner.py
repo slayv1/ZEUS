@@ -18,6 +18,15 @@ import os
 import sys
 import threading
 import time
+
+
+def _scanner_log(message: str) -> None:
+    """Пишет сбой сканера в zeus.log и не роняет индексацию."""
+    try:
+        from core.logging_service import error
+        error(f"[Scanner] {message}")
+    except Exception:
+        pass
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -56,9 +65,9 @@ def save_index_meta(total_files: int, external_files: int) -> None:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False, indent=2)
         os.replace(tmp, path)
-    except Exception:
+    except Exception as exc:
         # Метаданные не критичны: сбой записи не должен ронять индексацию
-        pass
+        _scanner_log(f"не записал метаданные индекса: {exc}")
 
 
 def load_index_meta() -> dict[str, Any]:
@@ -74,8 +83,8 @@ def load_index_meta() -> dict[str, Any]:
                 data = json.load(f)
             if isinstance(data, dict):
                 return data
-    except Exception:
-        pass
+    except Exception as exc:
+        _scanner_log(f"не прочитал метаданные индекса: {exc}")
     return {}
 
 
@@ -219,8 +228,8 @@ def load_index() -> dict[str, dict]:
                 elif isinstance(value, list) and value:
                     converted[name] = {"path": value[0], "source": "internal"}
             return converted
-    except Exception:
-        pass
+    except Exception as exc:
+        _scanner_log(f"не прочитал индекс: {exc}")
     return {}
 
 
@@ -299,8 +308,8 @@ def build_index(search_paths: list[str], max_workers: int = 4) -> dict[str, str]
                         # Сохраняем первый найденный путь
                         if name not in index:
                             index[name] = path
-            except Exception:
-                pass
+            except Exception as exc:
+                _scanner_log(f"поток сканирования упал: {exc}")
 
     return index
 
@@ -398,8 +407,8 @@ def list_available_drives() -> list[str]:
             device = part.device
             if device and device.endswith(":\\"):
                 drives.append(device)
-    except Exception:
-        pass
+    except Exception as exc:
+        _scanner_log(f"не прочитал список дисков: {exc}")
     return drives
 
 

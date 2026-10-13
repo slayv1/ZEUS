@@ -84,6 +84,13 @@ class ZeusHandlersMixin:
             self.page_title.value = SECTIONS[index]["label"]
             self.page_title.color = C["text"]
             self.page_title.update()
+        subtitle = getattr(self, "_page_subtitle", None)
+        if subtitle is not None:
+            subtitle.visible = index == 0
+            try:
+                subtitle.update()
+            except RuntimeError:
+                pass
 
         # Обновляем контент
         if self.content_area:
@@ -754,7 +761,10 @@ class ZeusHandlersMixin:
     def _on_chat_complete(self, full_text: str):
         """Обрабатывает завершение генерации LLM."""
         self._set_buttons(True)
-        self._log(f"✅ Ответ LLM получен ({len(full_text)} символов)")
+        preview = " ".join((full_text or "").split())
+        if len(preview) > 180:
+            preview = preview[:180] + "…"
+        self._log(f"✅ {preview}" if preview else "✅ Ответ LLM получен")
         self._on_status("Готов к работе")
 
 
@@ -774,14 +784,18 @@ class ZeusHandlersMixin:
         self._set_buttons(False)
 
         def _listen():
-            text = self.controller.listen_once()
-            if text:
-                self._log(f"🎤 Распознано: {text}")
-                # Отправляем как команду
-                self.controller.process_text(text, source="voice")
-            else:
-                self._log("🎤 Речь не распознана")
+            try:
+                text = self.controller.listen_once()
+                if text:
+                    self._log(f"🎤 Распознано: {text}")
+                    self.controller.process_text(text, source="voice")
+                else:
+                    self._log("🎤 Речь не распознана")
+                    self._on_status("Не удалось распознать речь")
+            except Exception as exc:
+                self._log(f"🎤 Ошибка записи: {exc}")
                 self._on_status("Не удалось распознать речь")
+            finally:
                 self._set_buttons(True)
 
         threading.Thread(target=_listen, daemon=True).start()

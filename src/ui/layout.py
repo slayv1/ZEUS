@@ -139,10 +139,23 @@ class ZeusLayoutMixin:
             weight=ft.FontWeight.BOLD,
             color=C["text"],
         )
+        self._page_subtitle = ft.Text(
+            "Ваш личный AI-ассистент. Всегда рядом.",
+            size=13,
+            color=C["text_dim"],
+        )
 
         self._title_row = ft.Row(
-            [self.page_title],
-            alignment=ft.MainAxisAlignment.START,
+            [
+                ft.Column(
+                    [self.page_title, self._page_subtitle],
+                    spacing=2,
+                ),
+                ft.Container(expand=True),
+                self.sleep_button,
+                self.listen_button,
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
         # Основной макет: сайдбар + рабочая зона
@@ -344,7 +357,7 @@ class ZeusLayoutMixin:
         Контракт сохранён: self._nav_buttons[i], _select_section(i), _nav_hover.
         """
         self._nav_buttons = []
-        logo_block = _sidebar.build_logo(C, config.resource_path("assets/icons/logo_1024.png"))
+        logo_block = _sidebar.build_logo(C)
         for i, section in enumerate(SECTIONS):
             btn = _sidebar.build_nav_item(section["icon"], section["label"], i == self.selected_index, C)
             btn.data = i
@@ -511,7 +524,7 @@ class ZeusLayoutMixin:
         self.listen_button = ft.IconButton(
             # SETTINGS_VOICE есть в Flet 0.85; MIC_SETTINGS отсутствует
             # в наборе Material Icons этой версии.
-            icon=ft.Icons.SETTINGS_VOICE_ROUNDED,
+            icon=ft.Icons.GRAPHIC_EQ_ROUNDED,
             icon_size=26,
             icon_color=C["electric"],
             width=54,
@@ -624,20 +637,16 @@ class ZeusLayoutMixin:
                 _core_card.build_core_card(
                     C, model=model_name,
                     voice_engine="Vosk", memory="Активна", plugins="5 загружено",
-                    online=True, transparent=True,
+                    online=True,
                 ),
-                ft.Container(height=2),
-                self._devices_label,
-                ft.Row([self.voice_switch, auto_listen_info], spacing=4),
             ],
             spacing=6,
-            width=270,
+            width=300,
         )
 
-        # Центр — светящаяся сфера-ядро (Ref: яркий круг по центру кадра).
-        # Адаптивный expand: занимает всё доступное пространство между панелями.
+        # Центр — светящаяся сфера с подписью ZEUS / NEURAL CORE.
         center = _neural_core.build_neural_core(
-            self.holo_container, "Готов к работе", "Слушаю...", C, size=360, globe=True,
+            self.holo_container, "Готов к работе", "Слушаю...", C, size=440, globe=True,
         )
         self._neural_status_text = center.status_text
         self._neural_sub_text = center.sub_text
@@ -648,56 +657,22 @@ class ZeusLayoutMixin:
         right_panel = ft.Column(
             [
                 _system_panel.build_system_panel(
-                    C, cpu=snap["cpu"], ram=snap["ram"], disk=snap["disk"], transparent=True,
+                    C, cpu=snap["cpu"], ram=snap["ram"], disk=snap["disk"],
                 ),
                 _system_panel.build_quick_actions(
-                    C, on_action=self._on_quick_action, transparent=True,
+                    C, on_action=self._on_quick_action,
                 ),
                 _system_panel.build_recent_commands(
-                    C, items=self._recent_commands(limit=5), transparent=True,
+                    C, items=self._recent_commands(limit=5),
                 ),
             ],
-            spacing=10,
-            width=300,
+            spacing=12,
+            width=340,
         )
         self._right_column = right_panel
         self._left_panel = left_panel
         self._center = center
         self._right_panel = right_panel
-
-        # Шапка: подзаголовок слева, ONLINE-пилюля + LED + кнопки вправо
-        # (заголовок «Главная» живёт в page_title над content_area).
-        online_pill = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Container(
-                        width=9, height=9, border_radius=5, bgcolor=C["green"],
-                        shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=C["green"]),
-                    ),
-                    ft.Text("ONLINE", size=12, weight=ft.FontWeight.W_600, color=C["text"]),
-                    ft.Text("| Соединение с Zeus", size=11, color=C["text_dim"]),
-                    self.voice_status,
-                ],
-                spacing=8,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=8),
-            bgcolor=ft.Colors.with_opacity(0.05, C["green"]),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.35, C["green"])),
-            border_radius=999,
-        )
-        header_row = ft.Row(
-            [
-                ft.Text("Ваш личный AI-ассистент. Всегда рядом.", size=13, color=C["text_dim"]),
-                ft.Container(expand=True),
-                self.status_dot,
-                online_pill,
-                ft.Container(width=6),
-                self.sleep_button,
-                self.listen_button,
-            ],
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        )
 
         # Адаптивный layout: 3 колонки на широких экранах, 1 колонка на узких
         page_w = self.page.window.width if self.page and self.page.window else 1380
@@ -706,8 +681,6 @@ class ZeusLayoutMixin:
         controls = ft.Container(
             content=ft.Column(
                 [
-                    header_row,
-                    ft.Container(height=8),
                     main_row,
                     ft.Container(height=10),
                     terminal_header,

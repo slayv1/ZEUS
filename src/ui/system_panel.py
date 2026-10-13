@@ -99,8 +99,8 @@ def build_quick_actions(
     actions = [
         (ft.Icons.LANGUAGE_ROUNDED, "Открыть браузер", "browser"),
         (ft.Icons.FOLDER_OPEN_ROUNDED, "Найти файл", "file"),
-        (ft.Icons.MUSIC_NOTE_ROUNDED, "Музыка", "music"),
-        (ft.Icons.CODE_ROUNDED, "VS Code", "vscode"),
+        (ft.Icons.MUSIC_NOTE_ROUNDED, "Включить музыку", "music"),
+        (ft.Icons.CODE_ROUNDED, "Запустить VS Code", "vscode"),
     ]
     buttons: list[ft.Control] = []
     for icon, label, key in actions:

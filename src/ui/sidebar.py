@@ -36,7 +36,7 @@ def build_logo(palette: dict[str, str], icon_src: str | None = None) -> ft.Row:
             src=icon_src, width=28, height=28, fit=ft.BoxFit.CONTAIN,
         )
     else:
-        icon_content = ft.Text("⚡", size=26)
+        icon_content = ft.Icon(ft.Icons.BOLT_ROUNDED, size=26, color=accent)
     logo_icon = ft.Container(
         content=icon_content,
         width=LOGO_SIZE,

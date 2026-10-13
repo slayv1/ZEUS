@@ -162,7 +162,7 @@ class TestDefaultRouteChanged:
 
         with patch("core.audio_devices.list_devices",
                    return_value=[_mic("m1", "USB Mic X")]):
-            with patch("core.controller.log") as mock_log:
+            with patch("core.controller_devices.log") as mock_log:
                 ctrl._on_audio_default_changed("input", "m1")
 
         assert refreshed == [True]  # подменю трея обновлено

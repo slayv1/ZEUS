@@ -262,9 +262,17 @@ class WakeWordDetector:
         print("[WakeWord] Цикл прослушивания запущен (лёгкий режим)")
 
     def stop(self):
-        """Останавливает цикл прослушивания Wake Word."""
+        """Останавливает цикл прослушивания Wake Word и отпускает микрофон.
+
+        Поток детектора закрывает sounddevice-поток только после текущего
+        блока. Ждём его, иначе кнопка «Слушать» открывает второе устройство
+        и на Windows зависает в sd.rec.
+        """
         self._running = False
         self._stop_ev.set()
+        thread = getattr(self, "_thread", None)
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=2.0)
         print("[WakeWord] Цикл прослушивания остановлен")
 
     def set_debug(self, enabled: bool):
