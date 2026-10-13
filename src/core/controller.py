@@ -299,6 +299,14 @@ class ZeusController:
         self.chat.set_temperature(ai.get("temperature", 0.7))
         self.chat.set_system_prompt(ai.get("system_prompt", ""))
 
+        # Агентный каркас (Harness, ТЗ v1.4): инструменты оркестрации LLM.
+        self.chat.set_agent_config(
+            enabled=bool(ai.get("agent_enabled", False)),
+            max_steps=ai.get("agent_max_steps", 5),
+            allow_write=bool(ai.get("agent_allow_write", False)),
+            allow_actions=bool(ai.get("agent_allow_actions", False)),
+        )
+
     def get_settings(self) -> dict:
         """Возвращает текущие настройки."""
         return self.settings
@@ -314,6 +322,26 @@ class ZeusController:
         """Статистика индекса файлов для отображения в UI (сколько файлов,
         когда сканировали в последний раз, идёт ли сканирование сейчас)."""
         return file_scanner.get_scanner().get_index_stats()
+
+    def _apply_noise_gate_settings(self) -> None:
+        """Доводит настройки шумового гейта до живого детектора (ТЗ v1.4 §2.2).
+
+        Порог Wake Word и общий выключатель применяются мгновенно. Строка
+        статуса печатается с префиксом [AUDIO] — такие строки мост UI показывает
+        в терминале, поэтому пользователь сразу видит фон, порог и счётчики
+        вместо гадания «Зевс меня не слышит» vs «Зевс не хочет отвечать».
+        """
+        vs = self.settings.get("voice_settings", {}) or {}
+        enabled = bool(vs.get("noise_gate_enabled", True))
+        threshold = int(vs.get("wake_energy_threshold", 30) or 0)
+        try:
+            wake = getattr(self.audio, "wake", None)
+            if wake is None:
+                return
+            wake.set_gate_config(enabled=enabled, threshold=threshold)
+            print(f"[AUDIO] {wake.gate_status()}")
+        except Exception as exc:  # noqa: BLE001 — настройка сохранена, применение вторично
+            print(f"[AUDIO] Не удалось применить шумовой гейт: {exc}")
 
     def update_settings(self, section: str, key: str, value: Any) -> bool:
         """Обновляет конкретную настройку и сохраняет в JSON.
@@ -341,6 +369,19 @@ class ZeusController:
                 self.chat.set_temperature(value)
             elif key == "system_prompt":
                 self.chat.set_system_prompt(value)
+            elif key in (
+                "agent_enabled", "agent_max_steps",
+                "agent_allow_write", "agent_allow_actions",
+            ):
+                # Агентный каркас: применяется к следующему же запросу модели,
+                # без перезапуска — как шумовой гейт в voice_settings.
+                ai = self.settings.get("ai_settings", {}) or {}
+                self.chat.set_agent_config(
+                    enabled=bool(ai.get("agent_enabled", False)),
+                    max_steps=ai.get("agent_max_steps", 5),
+                    allow_write=bool(ai.get("agent_allow_write", False)),
+                    allow_actions=bool(ai.get("agent_allow_actions", False)),
+                )
         elif section == "voice_settings":
             if key == "language":
                 self.audio.language = value
@@ -359,6 +400,13 @@ class ZeusController:
                 self.follow_up_timeout = int(value or 8)
             elif key == "logging_enabled":
                 self.logging_enabled = bool(value)
+            elif key in ("noise_gate_enabled", "wake_energy_threshold",
+                         "command_energy_threshold"):
+                # Шумовой гейт (ТЗ v1.4 §2.2) применяем сразу, без перезапуска:
+                # пользователь крутит порог и сразу видит, что Зевс отсекает шум,
+                # а не глохнет вместе с ним. Порог команды подхватится следующим
+                # стартом прослушивания (гейт создаётся в _listen_loop).
+                self._apply_noise_gate_settings()
         elif section == "app_settings" and key == "auto_listening":
             if value and not self.is_active:
                 self.set_active(True)

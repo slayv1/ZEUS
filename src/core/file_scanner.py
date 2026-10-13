@@ -97,6 +97,17 @@ _EXCLUDED_DIRS = {
     "Installer",
     "Microsoft",
     "WindowsApps",
+    # Служебные деревья: зависимости, кэши, git/python internals.
+    # Голосовая база и индекс не должны их видеть (command_hygiene).
+    "site-packages",
+    "mingw64",
+    "mingw32",
+    "git-core",
+    "node_modules",
+    ".cache",
+    "codex-runtimes",
+    "PackageCache",
+    "CommonRedist",
     "C:\\$Windows.~BT",
     "C:\\$Windows.~WS",
     "D:\\$Windows.~BT",
@@ -208,17 +219,14 @@ def load_index() -> dict[str, dict]:
 def save_index(index: dict[str, dict]) -> None:
     """Сохраняет индекс в index.json (новый формат с тегом source).
 
-    Запись атомарна (tmp + os.replace): прямая запись через open("w")
-    сначала усекает файл — обрыв процесса посреди json.dump оставлял
-    бы пустой/битый index.json и терял бы весь индекс.
+    Запись атомарная (tmp + fsync + os.replace) через общий helper:
+    прямая запись через open("w") сначала усекает файл — обрыв процесса посреди
+    json.dump оставлял бы пустой/битый index.json и терял бы весь индекс.
     """
     try:
-        path = _index_path()
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(index, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
-    except Exception:
+        from core.atomic_json import write_json_atomic
+        write_json_atomic(_index_path(), index, indent=2)
+    except Exception:  # noqa: BLE001 — индекс восстанавливается пересканированием
         pass
 
 
@@ -233,6 +241,8 @@ def build_index(search_paths: list[str], max_workers: int = 4) -> dict[str, str]
         dict в формате {имя_файла: путь, ...}
         Если найдено несколько вариантов - сохраняется первый найденный.
     """
+    from core.command_hygiene import is_noise_executable
+
     index: dict[str, str] = {}
     lock = threading.Lock()
     # Deny-листы загружаются один раз на весь билд (имена папок —
@@ -257,10 +267,14 @@ def build_index(search_paths: list[str], max_workers: int = 4) -> dict[str, str]
 
                 for file in files:
                     if file.lower().endswith(_TARGET_EXTENSION):
+                        full = os.path.join(root, file)
+                        # pip, установщики, кэши — не команды ассистента.
+                        if is_noise_executable(full):
+                            continue
                         name_lower = file.lower()
                         # Сохраняем только первый найденный путь для каждого имени
                         if name_lower not in local_index:
-                            local_index[name_lower] = os.path.join(root, file)
+                            local_index[name_lower] = full
         except (PermissionError, OSError):
             pass
         return local_index

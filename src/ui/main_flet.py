@@ -1743,6 +1743,48 @@ class ZeusUI:
         )
         self._settings_widgets["sys_prompt"] = sys_prompt
 
+        # --- Агентный каркас (Harness, ТЗ v1.4) ---
+        # Тумблеры применяются мгновенно через controller.update_settings ->
+        # chat.set_agent_config: пользователь щёлкает и следующий же запрос
+        # к модели идёт с инструментами (или без, если выключили).
+        agent_switch = ft.Switch(
+            label="Агентный режим (инструменты: запуск, файлы, клики, поиск)",
+            value=bool(ai.get("agent_enabled", False)),
+            active_color=C["electric"],
+            tooltip="Модель не просто отвечает текстом: она вызывает "
+                    "инструменты — запускает приложения, читает файлы, "
+                    "кликает, ищет в сети.",
+            on_change=lambda e: self._on_setting_change(
+                "ai_settings", "agent_enabled", bool(e.control.value)
+            ),
+        )
+        self._settings_widgets["agent_switch"] = agent_switch
+
+        agent_write_switch = ft.Switch(
+            label="Разрешить инструментам запись файлов",
+            value=bool(ai.get("agent_allow_write", False)),
+            active_color=C["electric"],
+            tooltip="Без этого тумблера write_file возвращает отказ модели. "
+                    "Системные папки (System32, Temp...) запрещены всегда.",
+            on_change=lambda e: self._on_setting_change(
+                "ai_settings", "agent_allow_write", bool(e.control.value)
+            ),
+        )
+        self._settings_widgets["agent_write_switch"] = agent_write_switch
+
+        agent_actions_switch = ft.Switch(
+            label="Разрешить запуск программ, ссылки и клики",
+            value=bool(ai.get("agent_allow_actions", False)),
+            active_color=C["electric"],
+            tooltip="Без этого тумблера модель может искать в сети и читать "
+                    "файлы, но не запускает программы, не открывает ссылки "
+                    "и не кликает мышью.",
+            on_change=lambda e: self._on_setting_change(
+                "ai_settings", "agent_allow_actions", bool(e.control.value)
+            ),
+        )
+        self._settings_widgets["agent_actions_switch"] = agent_actions_switch
+
         ai_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -1753,6 +1795,9 @@ class ZeusUI:
                 ft.Row([model_dd], spacing=12),
                 ft.Row([temp_label], spacing=12),
                 ft.Row([temp_slider], spacing=12),
+                ft.Row([agent_switch], spacing=12),
+                ft.Row([agent_write_switch], spacing=12),
+                ft.Row([agent_actions_switch], spacing=12),
                 ft.Row([sys_prompt], spacing=12),
             ], spacing=12, scroll=ft.ScrollMode.AUTO),
             bgcolor=C["surface"],
@@ -1796,6 +1841,52 @@ class ZeusUI:
         )
         self._settings_widgets["lang_dd"] = lang_dd
 
+        # --- Шумовой гейт (ТЗ v1.4 §2.2) ---
+        # Отсекает гул кулеров и клики клавиатуры ДО распознавания — иначе Vosk
+        # рождает «команды-призраки» из шума. Порог применяется на лету
+        # (controller._apply_noise_gate_settings), результат виден сразу.
+        gate_enabled = ft.Switch(
+            label="Шумовой гейт (отсекать клавиатуру и гул)",
+            value=bool(voice.get("noise_gate_enabled", True)),
+            active_color=C["electric"],
+            tooltip="Пока Зевс ждёт слово «Зевс», фоновый шум не попадает в "
+                    "распознавание. Выключайте, только если ассистент не слышит "
+                    "тихую речь: вместо шума в логе появится «[AUDIO] [GATE]».",
+            on_change=lambda e: self._on_setting_change(
+                "voice_settings", "noise_gate_enabled", e.control.value
+            ),
+        )
+        self._settings_widgets["noise_gate_enabled"] = gate_enabled
+
+        wake_gate_slider = ft.Slider(
+            label="{value}",
+            min=0.0,
+            max=150.0,
+            divisions=30,
+            value=float(voice.get("wake_energy_threshold", 30) or 0),
+            width=240,
+            active_color=C["electric"],
+            inactive_color=C["surface_2"],
+            on_change=lambda e: self._on_setting_change(
+                "voice_settings", "wake_energy_threshold", int(e.control.value)
+            ),
+        )
+        cmd_gate_slider = ft.Slider(
+            label="{value}",
+            min=0.0,
+            max=150.0,
+            divisions=30,
+            value=float(voice.get("command_energy_threshold", 25) or 0),
+            width=240,
+            active_color=C["electric"],
+            inactive_color=C["surface_2"],
+            on_change=lambda e: self._on_setting_change(
+                "voice_settings", "command_energy_threshold", int(e.control.value)
+            ),
+        )
+        self._settings_widgets["wake_gate_slider"] = wake_gate_slider
+        self._settings_widgets["cmd_gate_slider"] = cmd_gate_slider
+
         voice_card = ft.Container(
             content=ft.Column([
                 ft.Row([
@@ -1806,6 +1897,16 @@ class ZeusUI:
                 ft.Row([voice_enabled], spacing=12),
                 ft.Row([tts_enabled], spacing=12),
                 ft.Row([lang_dd], spacing=12),
+                ft.Divider(height=1, color=C["border"]),
+                ft.Row([gate_enabled], spacing=12),
+                ft.Row([
+                    wake_gate_slider,
+                    ft.Text("порог в ожидании «Зевс»", size=12, color=C["text_dim"]),
+                ], spacing=12),
+                ft.Row([
+                    cmd_gate_slider,
+                    ft.Text("порог в режиме команды", size=12, color=C["text_dim"]),
+                ], spacing=12),
             ], spacing=12),
             bgcolor=C["surface"],
             border_radius=16,

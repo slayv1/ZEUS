@@ -167,14 +167,10 @@ def _exists_fuzzy(name: str, existing_keys: list[str], existing_names: list[str]
 
 
 def _save_atomic(data: dict[str, Any]) -> None:
-    """Атомарно пишет commands.json (temp + replace)."""
-    import json
+    """Атомарно пишет commands.json (общий helper tmp + fsync + os.replace)."""
     from core import config
-    path = config.data_path("commands.json")
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    from core.atomic_json import write_json_atomic
+    write_json_atomic(config.data_path("commands.json"), data, indent=2)
 
 
 # === Русскоязычные алиасы для игр (поиск по произношению) ===
@@ -308,6 +304,7 @@ def scan_and_update() -> dict[str, Any]:
         {"added_apps": [...], "added_games": [...], "updated": bool}
     """
     from core import actions
+    from core.command_hygiene import is_noise_executable, is_noise_game, prune_commands
 
     data = actions.load_commands()
     apps = data.setdefault("приложения", {})
@@ -315,7 +312,9 @@ def scan_and_update() -> dict[str, Any]:
 
     added_apps: list[str] = []
     added_games: list[str] = []
-    updated: bool = False
+    # Уже попавший в базу мусор (pip, git, установщики) вычищается на каждом скане.
+    removed = prune_commands(data)
+    updated: bool = bool(removed)
 
     existing_app_keys = list(apps.keys())
     existing_game_keys = list(games.keys())
@@ -331,7 +330,7 @@ def scan_and_update() -> dict[str, Any]:
     # 1. Рабочий стол → приложения
     for d in _desktop_dirs():
         for name, exe_path in _shortcut_candidates(d):
-            if not exe_path:
+            if not exe_path or is_noise_executable(exe_path):
                 continue
             key = _norm(name) or name.lower()
             if not key:
@@ -346,6 +345,8 @@ def scan_and_update() -> dict[str, Any]:
 
     # 2. Steam → игры
     for appid, name in _steam_games():
+        if is_noise_game(name):
+            continue
         key = name.lower()
         if key in games:
             if isinstance(games[key], dict) and not games[key].get("aliases"):

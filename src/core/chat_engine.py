@@ -26,6 +26,20 @@ try:
 except Exception:  # noqa: BLE001 — допустимо при импорте вне проекта
     config = None
 
+# Атомарная запись JSON (кэш ответов): tmp + fsync + os.replace
+try:
+    from core.atomic_json import write_json_atomic
+except Exception:  # noqa: BLE001 — допустимо при импорте вне проекта
+    def write_json_atomic(path, data, *, indent=2, sort_keys=False):  # type: ignore[misc]
+        """Заглушка на случай импорта модуля вне проекта: пишем как раньше."""
+        import json as _json
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                _json.dump(data, f, ensure_ascii=False, indent=indent)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
 
 OLLAMA_HOST = "http://localhost:11434"
 
@@ -104,6 +118,15 @@ class ChatEngine:
         self.system_prompt = ""
         self.temperature = 0.7
 
+        # --- Агентный каркас (Harness, ТЗ v1.4) ---
+        # agent_enabled: False -> обычный стриминг «вопрос-ответ»;
+        # True -> цикл с инструментами (запуск приложений, файлы, клики,
+        # веб-поиск) через core.agent_harness.AgentHarness.
+        self.agent_enabled = False
+        self.agent_max_steps = 5
+        self.agent_allow_write = False
+        self.agent_allow_actions = False
+
         # Callbacks
         self.on_token: Callable[[str], None] | None = None
         self.on_complete: Callable[[str], None] | None = None
@@ -159,14 +182,15 @@ class ChatEngine:
         """Сохраняет накопленный кэш на диск (best-effort).
 
         Вызывается только при удержанном _cache_lock (см. _remember).
+        Запись атомарная: усечённый при краш cache.json означал бы потерю
+        всей накопленной памяти ответов.
         """
         with _cache_lock:
             if not self._cache:
                 return
             try:
                 os.makedirs(os.path.dirname(_CACHE_PATH), exist_ok=True)
-                with open(_CACHE_PATH, "w", encoding="utf-8") as f:
-                    json.dump(self._cache, f, ensure_ascii=False, indent=2)
+                write_json_atomic(_CACHE_PATH, self._cache, indent=2)
             except Exception:  # noqa: BLE001
                 pass
 
@@ -283,6 +307,12 @@ class ChatEngine:
 
         Исключает ошибку «Event loop is closed»: используется синхронный
         ollama.chat вместо AsyncClient + event loop.
+
+        Если включён агентный каркас (agent_enabled), сначала пробуем цикл
+        с инструментами (core.agent_harness): модель может запускать
+        приложения, читать файлы, кликать и искать в сети. При любой ошибке
+        каркаса (модель без tool-calling, сбой клиента) — тихий откат на
+        обычный стриминг ниже: чат никогда не должен «умирать» из-за Harness.
         """
         full_text = ""
         try:
@@ -290,6 +320,17 @@ class ChatEngine:
             if self.system_prompt:
                 messages.append({"role": "system", "content": self.system_prompt})
             messages.extend(self.conversation[-_MAX_HISTORY:])
+
+            # --- Агентный каркас: цикл инструментов вместо чистого текста ---
+            if self.agent_enabled:
+                agent_text = self._run_agent(messages, text)
+                if agent_text is not None:
+                    full_text = agent_text
+                    if self.on_token:
+                        self.on_token(full_text)
+                    if self.on_complete:
+                        self.on_complete(full_text)
+                    return
 
             # Синхронный стриминг от Ollama через клиент (хост задан в конструкторе)
             stream = self.client.chat(
@@ -321,6 +362,42 @@ class ChatEngine:
             with self._busy_lock:
                 self._is_busy = False
 
+    def _run_agent(self, messages: list[dict], text: str) -> str | None:
+        """Цикл агентного каркаса. None -> откатиться на обычный стриминг.
+
+        Возвращает финальный текст модели. История пополняется только финальным
+        ответом (без служебных tool-сообщений — они одноразовые), а «запоминать»
+        в кэш можно лишь ответы, полученные БЕЗ инструментов: закэшированный
+        «Запускаю X» в следующий раз ничего не запустил бы.
+        """
+        try:
+            from core.agent_harness import AgentHarness
+        except Exception as exc:  # noqa: BLE001 — модуль обязан быть, но...
+            print(f"[AI] [HARNESS] каркас недоступен: {exc}")
+            return None
+
+        try:
+            harness = AgentHarness(on_event=print)
+            result = harness.run(
+                self.client,
+                model=self.model,
+                messages=messages,
+                temperature=self.temperature,
+                max_steps=self.agent_max_steps,
+                allow_write=self.agent_allow_write,
+                allow_actions=self.agent_allow_actions,
+            )
+        except Exception as exc:  # noqa: BLE001 — модель без tools и т.п.
+            print(f"[AI] [HARNESS] цикл не удался, откат на стриминг: {exc}")
+            return None
+
+        full_text = result.text or ""
+        self.conversation.append({"role": "assistant", "content": full_text})
+        if not result.used_tools:
+            # Ответ без инструментов — обычный чат, кэшируем как раньше.
+            self._remember(text, full_text)
+        return full_text
+
     def _trigger_error(self, message: str):
         """Уведомляет UI об ошибке через on_error (если зарегистрирован)."""
         if self.on_error:
@@ -344,3 +421,30 @@ class ChatEngine:
     def set_temperature(self, temp: float):
         """Устанавливает температуру генерации (0.0–2.0)."""
         self.temperature = max(0.0, min(2.0, temp))
+
+    def set_agent_config(
+        self,
+        enabled: bool,
+        max_steps: int = 5,
+        allow_write: bool = False,
+        allow_actions: bool = False,
+    ) -> None:
+        """Настраивает агентный каркас (Harness) без перезапуска.
+
+        Вызывается из controller._apply_settings / update_settings, чтобы
+        тумблеры настроек применялись к следующему же запросу к модели.
+        """
+        self.agent_enabled = bool(enabled)
+        try:
+            self.agent_max_steps = max(1, min(20, int(max_steps)))
+        except (TypeError, ValueError):
+            self.agent_max_steps = 5
+        self.agent_allow_write = bool(allow_write)
+        self.agent_allow_actions = bool(allow_actions)
+        state = "вкл" if self.agent_enabled else "выкл"
+        print(
+            f"[AI] [HARNESS] агентный каркас: {state} "
+            f"(шагов={self.agent_max_steps}, "
+            f"запись файлов={'да' if self.agent_allow_write else 'нет'}, "
+            f"действия={'да' if self.agent_allow_actions else 'нет'})"
+        )
