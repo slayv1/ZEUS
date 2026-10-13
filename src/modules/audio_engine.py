@@ -337,6 +337,12 @@ class AudioEngine:
             _vs = load_settings().get("voice_settings", {})
             threshold = int(_vs.get("wake_energy_threshold", 30))
             self.wake.set_energy_threshold(threshold)
+            # Шумовой гейт (ТЗ v1.4 §2.2): общий выключатель энергетического
+            # фильтра для wake-режима. Порог команды настраивается отдельно
+            # (command_energy_threshold) и применяется в _make_gate.
+            self.wake.set_gate_config(
+                enabled=bool(_vs.get("noise_gate_enabled", True))
+            )
             # Передаём усиление микрофона в wake-детектор (тихий микрофон должен
             # достигать энергопорога и порога распознавания).
             self.wake.mic_gain = getattr(self, "mic_gain", 1.0)
@@ -645,6 +651,58 @@ class AudioEngine:
                 self.on_command("__WAKE__")
         threading.Thread(target=_activate, daemon=True).start()
 
+    def _make_gate(self):
+        """Создаёт шумовой гейт для цикла прослушивания команды.
+
+        Настройки читаются заново при каждом старте прослушивания, чтобы
+        изменение порога в окне настроек применялось без перезапуска.
+        Если модуль гейта по какой-то причине недоступен — возвращаем
+        «всегда открытый» объект: аудио-тракт не должен падать из-за фильтра.
+        """
+        threshold, enabled = 30, True
+        try:
+            from core.config import load_settings
+            vs = load_settings().get("voice_settings", {})
+            threshold = int(vs.get(
+                "command_energy_threshold",
+                vs.get("wake_energy_threshold", 30),
+            ))
+            enabled = bool(vs.get("noise_gate_enabled", True))
+        except Exception:  # noqa: BLE001 — defaults безопасны
+            pass
+        try:
+            from core.audio_gate import NoiseGate
+            return NoiseGate(threshold, enabled=enabled)
+        except Exception:  # noqa: BLE001 — без гейта слушаем как раньше
+            class _AlwaysOpen:
+                passed = 0
+                rejected = 0
+
+                @staticmethod
+                def allow(data, now=None):
+                    return True
+
+                @staticmethod
+                def describe():
+                    return "шумовой гейт недоступен"
+            return _AlwaysOpen()
+
+    @staticmethod
+    def _has_partial(recognizer) -> bool:
+        """True, если у Vosk уже есть незаконченная фраза (частичный результат).
+
+        Нужен, чтобы шумовой гейт не обрывал начатую фразу: если распознаватель
+        «услышал» начало слова, блоки подаём даже ниже порога. Любая ошибка
+        трактуется как «фраза есть» (fail-open) — риск обрезанного слова хуже,
+        чем лишние блоки шума в распознавателе.
+        """
+        try:
+            import json as _json
+            partial = _json.loads(recognizer.PartialResult()).get("partial", "")
+            return bool(partial and partial.strip())
+        except Exception:  # noqa: BLE001
+            return True
+
     def _listen_loop(self):
         """Основной цикл прослушивания команды (работает в фоновом потоке).
 
@@ -695,6 +753,17 @@ class AudioEngine:
                         stream.read(chunk)
                     except Exception:  # noqa: BLE001
                         break
+                # Шумовой гейт (ТЗ v1.4 §2.2): гул кулеров, клики клавиатуры и
+                # шорох стола раньше попадали прямо в KaldiRecognizer и рождали
+                # «команды-призраки». Гейт адаптивный: порог = max(абсолютный
+                # минимум, фон × 2), после речи остаётся открытым ещё hangover,
+                # поэтому окончание фразы не обрезается.
+                gate = self._make_gate()
+                last_gate_log = 0.0
+                print(f"[AUDIO] [GATE] шумовой гейт: "
+                      f"{'вкл' if getattr(gate, 'enabled', True) else 'выкл'} "
+                      f"порог={getattr(gate, 'threshold', 0)} "
+                      f"(шум не пойдёт в распознаватель)")
                 while self._listen_running:
                     try:
                         data, _ = stream.read(chunk)
@@ -703,6 +772,20 @@ class AudioEngine:
                     if data is None or len(data) == 0:
                         continue
                     data = apply_microphone_gain(data, self.mic_gain)
+                    now = _wtime.monotonic()
+                    if not gate.allow(data, now=now):
+                        # Тишина/шум: в recognizer не идёт, но и фразу на середине
+                        # не бросаем — если Vosk уже начал фразу, блок подаём.
+                        if self._has_partial(recognizer):
+                            if recognizer.AcceptWaveform(data):
+                                res = _json.loads(recognizer.Result())
+                                self._handle_listen_text((res.get("text") or "").strip())
+                            continue
+                        if now - last_gate_log > 5.0:
+                            last_gate_log = now
+                            print(f"[AUDIO] [GATE] шум отсечён: {gate.describe()} "
+                                  f"(пропущено={gate.passed} отклонено={gate.rejected})")
+                        continue
                     if recognizer.AcceptWaveform(data):
                         res = _json.loads(recognizer.Result())
                         self._handle_listen_text((res.get("text") or "").strip())

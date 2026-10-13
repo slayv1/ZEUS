@@ -53,10 +53,12 @@ class ThemeManager:
     def _save(self) -> None:
         path = _theme_file_path()
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump({"theme": self._theme}, f, ensure_ascii=False, indent=2)
-        except OSError:
-            pass
+            from core.atomic_json import write_json_atomic
+        except ImportError:  # запуск из src/
+            from atomic_json import write_json_atomic  # type: ignore[no-redef]
+        # Атомарно: theme.json переписывается при каждом переключении темы,
+        # усечённый при краш файл означал бы молчаливый возврат к тёмной теме.
+        write_json_atomic(path, {"theme": self._theme}, indent=2)
 
     def get_theme(self) -> str:
         """Получить текущую тему: 'dark' или 'light'."""

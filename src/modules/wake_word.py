@@ -132,6 +132,12 @@ class WakeWordDetector:
         self.energy_threshold = 30
         self._recent_peak = 0       # затухающий пик громкости последних блоков
         self._noise_floor = 0       # адаптивный шумовой фон (медленный трекер минимума)
+        # Шумовой гейт (ТЗ v1.4 §2.2): общий выключатель энергетического фильтра
+        # и его диагностика. Задаётся из настроек voice_settings.noise_gate_enabled.
+        self._gate_enabled = True
+        self._gate_passed = 0       # сколько блоков/фраз гейт пропустил
+        self._gate_rejected = 0     # сколько отсеяно как шум
+        self._last_gate_log_ts = 0.0  # троттлинг сообщений [AUDIO] [GATE]
         self._muted = False         # true — детектор заглушен (собственная речь TTS)
         self._last_wake_ts = 0.0    # штамп последнего подтверждённого срабатывания
         # Усиление микрофона для wake (задаётся из AudioEngine.mic_gain). Важно,
@@ -227,6 +233,9 @@ class WakeWordDetector:
     def set_mic_device(self, index: int | None):
         """Устанавливает индекс устройства микрофона."""
         self._mic_device_index = index
+        # Смена устройства меняет и уровень, и шум: фон/пик, снятые с прежнего
+        # микрофона, сделали бы гейт глухим (или наоборот — слишком открытым).
+        self.reset()
 
     def start(self, on_wake: callable):
         """Запускает фоновый цикл прослушивания Wake Word.
@@ -429,6 +438,56 @@ class WakeWordDetector:
             if self.debug:
                 print(f"[WAKEWORD] Ошибка обработки блока: {e}")
 
+    def set_gate_config(self, enabled: bool | None = None,
+                        threshold: int | None = None) -> None:
+        """Меняет шумовой гейт на лету (из окна настроек, без перезапуска).
+
+        ``enabled`` — общий выключатель гейта (0 = «обход» = гейт выключен),
+        ``threshold`` — абсолютный порог в тех же единицах, что и ``peak``.
+        Оба аргумента необязательны: переданный как None остаётся прежним.
+        """
+        if enabled is not None:
+            # Значение приходит из settings.json, где тумблеры хранятся и как
+            # bool, и как строка ("0"/"1"/"false") — трактуем единообразно.
+            self._gate_enabled = str(enabled).strip().lower() not in (
+                "0", "false", "no", "off", ""
+            )
+        if threshold is not None:
+            self.set_energy_threshold(threshold)
+
+    def gate_status(self) -> str:
+        """Статус гейта для терминала: фон/пик/эффективный порог и счётчики."""
+        return (f"Шумовой гейт: {'вкл' if self._gate_enabled else 'выкл'} "
+                f"порог={self.energy_threshold} фон={self._noise_floor} "
+                f"гейт={max(self.energy_threshold, self._noise_floor * 2)} "
+                f"пропущено={self._gate_passed} отклонено={self._gate_rejected}")
+
+    def _log_gate_block(self, detail: str) -> None:
+        """Пишет отклонение гейта в терминал — не чаще раза в 5 секунд.
+
+        Пользователь должен видеть, что Зевс его не слышит не потому, что
+        сломался, а потому что гейт закрыт. Но печатать каждый блок
+        (4 блока в секунду) — значит утопить терминал.
+        """
+        import time as _t
+        now = _t.monotonic()
+        if now - self._last_gate_log_ts < 5.0:
+            return
+        self._last_gate_log_ts = now
+        print(f"[AUDIO] [GATE] {self.gate_status()} | {detail}")
+
+    def reset(self) -> None:
+        """Сбрасывает состояние гейта (смена микрофона, старт прослушивания)."""
+        self._recent_peak = 0
+        self._noise_floor = 0
+        self._gate_passed = 0
+        self._gate_rejected = 0
+        if self._recognizer is not None:
+            try:
+                self._recognizer.Reset()
+            except Exception:  # noqa: BLE001 — Reset есть не во всех версиях Vosk
+                pass
+
     def _update_recent_peak(self, peak: int):
         """Обновляет затухающий пик и адаптивный шумовой фон.
 
@@ -458,11 +517,15 @@ class WakeWordDetector:
 
         # 2. Энергетический фильтр (VAD): порог не ниже абсолютного минимума и
         #    выше шумового фона. Адаптивно — работает и на тихом микрофоне.
+        #    Флаг _gate_enabled — общий выключатель гейта из настроек
+        #    (voice_settings.noise_gate_enabled); при выключенном фильтре
+        #    срабатывание проходит по одному лишь тексту.
         gate = max(self.energy_threshold, self._noise_floor * 2)
-        if self._recent_peak < gate:
-            if self.debug:
-                print(f"[WAKEWORD] Отклонено энергогате: peak={self._recent_peak} < порог={gate}")
+        if self._gate_enabled and self._recent_peak < gate:
+            self._gate_rejected += 1
+            self._log_gate_block(f"peak={self._recent_peak} < гейт={gate}")
             return True
+        self._gate_passed += 1
 
         # 3. Кулдаун — не позволяем эхо/эху колонок срабатывать повторно
         import time

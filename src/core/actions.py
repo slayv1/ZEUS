@@ -14,7 +14,10 @@
 
 from __future__ import annotations
 
+import ast
 import json
+import math
+import operator
 import os
 import random
 import re
@@ -25,6 +28,7 @@ import urllib.parse
 from typing import Any
 
 from core import config
+from core.atomic_json import write_json_atomic
 import datetime
 import psutil
 
@@ -78,25 +82,94 @@ _NUM_WORDS = {
 }
 
 
-def _safe_calc(expr: str) -> float | None:
-    """Безопасно вычисляет арифметическое выражение (цифры и + - * / ** ( ))."""
-    expr = re.sub(r"\*\*+", "**", expr)
-    if not re.fullmatch(r"[\d+\-*/(). ]+", expr) or not re.search(r"\d", expr):
-        return None
-    if len(expr) > 100:
-        # Защита от чрезмерно длинных выражений (тоже влияет на стоимость eval).
-        return None
-    # Защита от DoS через непомерно большую степень/число: "9 в степени 999999999"
-    # проходит regex-фильтр выше (это просто цифры и **), но eval() на таком
-    # выражении надолго займёт CPU и выделит гигантский int. Ограничиваем длину
-    # операндов вокруг "**", а не сам факт наличия степени.
-    for base, exp in re.findall(r"(\d+)\s*\*\*\s*(\d+)", expr):
-        if len(exp) > 4 or len(base) > 6:  # степень < 10000, основание < 10^6
-            return None
+# --- Белый список операций калькулятора ---------------------------------
+# Раньше здесь стоял eval(expr, {"__builtins__": {}}, {}) с regex-фильтром по
+# символам. Такая защита хрупкая: стоит ослабить regex (например, разрешить
+# букву «e» для экспоненты), как появляется путь к выполнению кода. Теперь
+# выражение разбирается парсером Python, а вычисляется только то, что
+# СТРУКТУРНО является арифметикой над числами: вызовы, имена, атрибуты, срезы,
+# строковые литералы отсекаются на уровне AST.
+_CALC_BIN_OPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_CALC_UN_OPS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+
+# Ограничения вычислений: «9 в степени 999999999» — это легальная арифметика из
+# одних цифр, но вычисление съест CPU и память. Ограничиваем основание/показатель
+# и итог по модулю — гигантские int до приведения к float не доживают.
+_CALC_MAX_BASE = 1_000_000.0
+_CALC_MAX_EXPONENT = 10_000.0
+_CALC_MAX_RESULT = 1e30
+_CALC_MAX_DEPTH = 32
+
+
+def _as_float(value) -> float:
+    """float() без OverflowError: гигантский int -> inf (дальше отклоняется)."""
     try:
-        return float(eval(expr, {"__builtins__": {}}, {}))  # noqa: S307 — вход фильтрован, степень ограничена
-    except Exception:  # noqa: BLE001
+        return float(value)
+    except (OverflowError, TypeError, ValueError):
+        return float("inf")
+
+
+def _calc_node(node: ast.AST, depth: int = 0):
+    """Рекурсивно вычисляет узел AST, разрешая только арифметику над числами."""
+    if depth > _CALC_MAX_DEPTH:
+        raise ValueError("выражение слишком вложенное")
+
+    if isinstance(node, ast.Constant):
+        value = node.value
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("допустимы только числа")
+        return value
+
+    if isinstance(node, ast.BinOp) and type(node.op) in _CALC_BIN_OPS:
+        left = _calc_node(node.left, depth + 1)
+        right = _calc_node(node.right, depth + 1)
+        if isinstance(node.op, ast.Pow):
+            if abs(_as_float(right)) > _CALC_MAX_EXPONENT:
+                raise ValueError("показатель степени слишком большой")
+            if abs(_as_float(left)) > _CALC_MAX_BASE:
+                raise ValueError("основание степени слишком большое")
+        result = _CALC_BIN_OPS[type(node.op)](left, right)
+        if abs(_as_float(result)) > _CALC_MAX_RESULT:
+            raise ValueError("результат слишком большой")
+        return result
+
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _CALC_UN_OPS:
+        return _CALC_UN_OPS[type(node.op)](_calc_node(node.operand, depth + 1))
+
+    raise ValueError("недопустимая конструкция в выражении")
+
+
+def _safe_calc(expr: str) -> float | None:
+    """Вычисляет арифметическое выражение без eval() (через ast + белый список).
+
+    Поддерживаются цифры, скобки, + - * / // % ** и унарный минус; экспоненциальная
+    запись («1e3») тоже проходит — парсер Python её разбирает, а eval больше нет.
+    """
+    expr = re.sub(r"\*\*+", "**", (expr or "").strip())
+    if not expr or len(expr) > 100:
         return None
+    if not re.search(r"\d", expr):
+        return None
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        return None
+    try:
+        result = float(_calc_node(tree.body))
+    except (ValueError, TypeError, ZeroDivisionError, ArithmeticError,
+            OverflowError, RecursionError):
+        return None
+    # inf/nan ответом пользователю быть не должны: «1e999» парсится в inf
+    # без исключения, а 1e999-1e999 даёт nan.
+    return result if math.isfinite(result) else None
 
 
 def _handle_calc_command(text: str) -> dict[str, Any] | None:
@@ -223,6 +296,34 @@ def _handle_notes_command(text: str) -> dict[str, Any] | None:
 def _commands_path() -> str:
     """Возвращает путь к commands.json рядом с исполняемым файлом / main.py."""
     return config.data_path("commands.json")
+
+
+def _save_commands(commands: dict[str, Any]) -> bool:
+    """Сохраняет commands.json атомарно (аудит v1.4, §2.2 надёжности данных).
+
+    Прежний ``open(path, "w")`` усекал файл до начала записи: процесс, убитый
+    посреди ``json.dump``, оставлял пользователя без ВСЕХ ярлыков приложений и
+    игр — молча, без ошибки в логе. Запись через tmp + os.replace даёт либо
+    старую, либо новую версию файла, но никогда не обрезанную середину.
+    """
+    if not write_json_atomic(_commands_path(), commands, indent=2):
+        return False
+    # Кеш по mtime обязан подхватить новые данные сразу — watchdog может
+    # не успеть среагировать на событие файловой системы.
+    try:
+        reload_commands()
+    except Exception:  # noqa: BLE001 — файл сохранён, кеш обновим в следующий раз
+        pass
+    return True
+
+
+def _command_save_failed(action: str) -> dict[str, Any]:
+    """Ответ «не удалось записать commands.json» для всех операций с командами."""
+    return {
+        "success": False,
+        "message": "Не удалось записать список команд на диск, сэр.",
+        "action": action,
+    }
 
 
 def _commands_map_path() -> str:
@@ -889,10 +990,9 @@ def save_app_command(name: str, exe_path: str) -> dict[str, Any]:
         
         commands["приложения"][name] = exe_path
         
-        # Сохраняем в файл
-        path = _commands_path()
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(commands, f, indent=2, ensure_ascii=False)
+        # Сохраняем в файл (атомарно: tmp + os.replace, без усечения файла)
+        if not _save_commands(commands):
+            return _command_save_failed("remember_app")
         
         return {
             "success": True,
@@ -928,9 +1028,8 @@ def delete_command(name: str) -> dict[str, Any]:
         # Ищем в приложениях
         if name in commands.get("приложения", {}):
             del commands["приложения"][name]
-            path = _commands_path()
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(commands, f, indent=2, ensure_ascii=False)
+            if not _save_commands(commands):
+                return _command_save_failed("delete_command")
             return {
                 "success": True,
                 "message": f"Удалил команду '{name}' из списка приложений, сэр.",
@@ -940,9 +1039,8 @@ def delete_command(name: str) -> dict[str, Any]:
         # Ищем в играх
         if name in commands.get("игры", {}):
             del commands["игры"][name]
-            path = _commands_path()
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(commands, f, indent=2, ensure_ascii=False)
+            if not _save_commands(commands):
+                return _command_save_failed("delete_command")
             return {
                 "success": True,
                 "message": f"Удалил команду '{name}' из списка игр, сэр.",
@@ -953,9 +1051,8 @@ def delete_command(name: str) -> dict[str, Any]:
         for key in list(commands.get("приложения", {}).keys()):
             if name in key or key in name:
                 del commands["приложения"][key]
-                path = _commands_path()
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(commands, f, indent=2, ensure_ascii=False)
+                if not _save_commands(commands):
+                    return _command_save_failed("delete_command")
                 return {
                     "success": True,
                     "message": f"Удалил команду '{key}' из списка приложений, сэр.",
@@ -966,9 +1063,8 @@ def delete_command(name: str) -> dict[str, Any]:
         for key in list(commands.get("игры", {}).keys()):
             if name in key or key in name:
                 del commands["игры"][key]
-                path = _commands_path()
-                with open(path, "w", encoding="utf-8") as f:
-                    json.dump(commands, f, indent=2, ensure_ascii=False)
+                if not _save_commands(commands):
+                    return _command_save_failed("delete_command")
                 return {
                     "success": True,
                     "message": f"Удалил команду '{key}' из списка игр, сэр.",
